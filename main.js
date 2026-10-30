@@ -1,17 +1,17 @@
 /**
- * 0X Premium Secure Loader, Live Customizer & Instant Zero-Flash DOM Lock (Combined)
+ * 0X Premium Secure Loader, Live Customizer & Instant Zero-Flash DOM Lock (Fixed)
  */
 
 (async function () {
   'use strict';
 
-  // --- 0. TEXT CONTENT SETTER HOOKING ---
+  // --- 0. TEXT CONTENT SETTER HOOKING (FIXED FOR CASE-INSENSITIVE DEMO) ---
   const originalTextContentSetter = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent').set;
 
   Object.defineProperty(Node.prototype, 'textContent', {
       set: function(val) {
-          if (typeof val === 'string' && val.includes('DEMO')) {
-              val = val.replace(/DEMO/gi, 'LIVE');
+          if (typeof val === 'string' && /demo/i.test(val)) {
+              val = val.replace(/demo/gi, 'LIVE');
           }
           return originalTextContentSetter.call(this, val);
       },
@@ -591,8 +591,8 @@
               let sNode;
               while(sNode = shadowWalker.nextNode()) {
                   const sTxt = sNode.nodeValue;
-                  if(sTxt && (sTxt.includes('Demo') || sTxt.includes('DEMO'))) {
-                      sNode.nodeValue = sTxt.replace(/Demo/gi, 'Live').replace(/DEMO/gi, 'LIVE');
+                  if(sTxt && /demo/i.test(sTxt)) {
+                      sNode.nodeValue = sTxt.replace(/demo/gi, 'LIVE');
                   }
               }
           }
@@ -602,12 +602,11 @@
       let node;
       while(node = walker.nextNode()) {
           const txt = node.nodeValue;
-          if(txt && (txt.includes('demo-trade') || txt.includes('Demo') || txt.includes('DEMO'))) {
+          if(txt && /demo/i.test(txt)) {
               node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
                                   .replace(/Demo Account/gi, 'Live Account')
                                   .replace(/Demo trading/gi, 'Live trading')
-                                  .replace(/Demo/gi, 'Live')
-                                  .replace(/DEMO/gi, 'LIVE');
+                                  .replace(/demo/gi, 'LIVE');
           }
       }
 
