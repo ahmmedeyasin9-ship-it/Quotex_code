@@ -1,8 +1,52 @@
-/** * 0X Premium Secure Loader, Live Customizer & Deep State Override Edition */ 
+/** * 0X Premium Secure Loader, Live Customizer & Absolute DOM Text/HTML Lock Edition */ 
 (async function () { 
     'use strict'; 
 
-    // --- 0. DEEP STATE & PROPERTY OVERRIDE --- 
+    // --- 0. ABSOLUTE NODE SETTER HOOK (BLOCKS DEMO TEXT RE-INJECTION) ---
+    try {
+        const sanitizeText = (txt) => {
+            if (!txt || typeof txt !== 'string') return txt;
+            if (txt.includes('demo') || txt.includes('DEMO')) {
+                return txt.replace(/demo-trade/gi, 'trade')
+                          .replace(/Demo Account/gi, 'Live Account')
+                          .replace(/Demo trading/gi, 'Live trading')
+                          .replace(/Demo/gi, 'Live')
+                          .replace(/DEMO/gi, 'LIVE');
+            }
+            return txt;
+        };
+
+        const origTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+        if (origTextContent && origTextContent.set) {
+            Object.defineProperty(Node.prototype, 'textContent', {
+                get: function() {
+                    return origTextContent.get.call(this);
+                },
+                set: function(value) {
+                    return origTextContent.set.call(this, sanitizeText(value));
+                },
+                configurable: true,
+                enumerable: true
+            });
+        }
+
+        const origInnerHtml = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        if (origInnerHtml && origInnerHtml.set) {
+            Object.defineProperty(Element.prototype, 'innerHTML', {
+                get: function() {
+                    return origInnerHtml.get.call(this);
+                },
+                set: function(value) {
+                    let modified = typeof value === 'string' ? value.replace(/demo/gi, 'live').replace(/DEMO/gi, 'LIVE') : value;
+                    return origInnerHtml.set.call(this, modified);
+                },
+                configurable: true,
+                enumerable: true
+            });
+        }
+    } catch(e) {}
+
+    // --- 1. DEEP STATE & PROPERTY OVERRIDE --- 
     try {
         const overrideObjectState = (obj) => {
             if (!obj || typeof obj !== 'object') return;
@@ -14,7 +58,6 @@
             } catch(e) {}
         };
 
-        // Intercept JSON parsing to sanitize API payloads globally
         const origJSONParse = JSON.parse;
         JSON.parse = function(text, reviver) {
             let res = origJSONParse.call(this, text, reviver);
@@ -25,10 +68,9 @@
         };
     } catch(e) {}
 
-    // --- 1. NETWORK FETCH, XHR & WEBSOCKET INTERCEPTOR --- 
+    // --- 2. NETWORK FETCH, XHR & WEBSOCKET INTERCEPTOR --- 
     (function networkDemoBlocker() { 
         try { 
-            // Fetch Interceptor
             const origFetch = window.fetch; 
             window.fetch = async function(...args) { 
                 let [resource, config] = args; 
@@ -63,7 +105,6 @@
                 return response; 
             }; 
 
-            // XHR Interceptor
             const origOpen = XMLHttpRequest.prototype.open; 
             XMLHttpRequest.prototype.open = function(method, url) { 
                 if (typeof url === 'string') { 
@@ -83,7 +124,6 @@
                 return origSend.call(this, body); 
             }; 
 
-            // WebSocket Interceptor Hook
             const OrigWebSocket = window.WebSocket;
             window.WebSocket = function(url, protocols) {
                 const ws = new OrigWebSocket(url, protocols);
@@ -103,7 +143,7 @@
         } catch(e) {} 
     })(); 
 
-    // --- 2. EARLY SHADOW ROOT INTERCEPTOR --- 
+    // --- 3. EARLY SHADOW ROOT INTERCEPTOR --- 
     (function earlyShadowPatch() { 
         try { 
             if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) { 
@@ -117,7 +157,7 @@
         } catch(e) {} 
     })(); 
 
-    // --- 3. CLEANUP PREVIOUS INSTANCES --- 
+    // --- 4. CLEANUP PREVIOUS INSTANCES --- 
     window.qxLiveObserver?.disconnect(); 
     clearInterval(window.qxUrlForceInterval); 
     clearInterval(window.qxBalanceInterval); 
@@ -128,7 +168,7 @@
     document.getElementById("shadin-demo")?.remove(); 
     document.getElementById("shadin-demo-style")?.remove(); 
 
-    // --- 4. CONFIGURATION & URL/TITLE GUARDS --- 
+    // --- 5. CONFIGURATION & URL/TITLE GUARDS --- 
     const cleanUrl = () => { 
         if (window.location.href.includes('demo') || window.location.pathname.includes('demo')) { 
             const cleanHref = window.location.href 
@@ -173,7 +213,7 @@
     window.addEventListener('popstate', () => { cleanUrl(); cleanTitle(); }); 
     window.qxUrlForceInterval = setInterval(() => { cleanUrl(); cleanTitle(); guardLive(); }, 1); 
 
-    // --- 5. CORE HELPER FUNCTIONS --- 
+    // --- 6. CORE HELPER FUNCTIONS --- 
     function getBalance(){ 
         const all = document.querySelectorAll('.zt1hG, header div, header span, .v2KPX'); 
         for(const el of all){ 
@@ -210,7 +250,7 @@
         'Bangladesh': 'bd', 'India': 'in', 'United States': 'us', 'United Kingdom': 'gb', 'Canada': 'ca', 'Australia': 'au', 'United Arab Emirates': 'ae', 'Saudi Arabia': 'sa', 'Pakistan': 'pk' 
     }; 
 
-    // --- 6. INJECT STYLES --- 
+    // --- 7. INJECT STYLES --- 
     const style = document.createElement('style'); 
     style.id = 'qx-combined-style'; 
     style.textContent = ` 
@@ -230,7 +270,7 @@
     `; 
     document.head.appendChild(profitLineStyle); 
 
-    // --- 7. LEADERBOARD & PROFIT LOGIC --- 
+    // --- 8. LEADERBOARD & PROFIT LOGIC --- 
     function findCard(){ 
         return [...document.querySelectorAll('div')].find(el => { 
             const t = (el.innerText || '').trim(); 
@@ -602,7 +642,7 @@
     }); 
     window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true }); 
 
-    // --- 8. VERIFICATION PASSWORD POPUP SCRIPT --- 
+    // --- 9. VERIFICATION PASSWORD POPUP SCRIPT --- 
     const demoStyle = document.createElement("style"); 
     demoStyle.id = "shadin-demo-style"; 
     demoStyle.textContent = ` 
@@ -706,7 +746,7 @@
             checkCode(); 
         }); 
         input.addEventListener("keydown", e => { 
-            if(e.key === "Backspace" && !input.value && index > 0){ 
+            if(key === "Backspace" && !input.value && index > 0){ 
                 inputs[index - 1].focus(); 
             } 
             if(e.key === "ArrowLeft" && index > 0){ 
@@ -733,5 +773,5 @@
     }); 
 
     inputs[0].focus(); 
-    console.log("0X Premium Secure Loader Active with Deep JSON State Override & Zero-Flash DOM Lock!"); 
+    console.log("0X Premium Secure Loader Active with Absolute DOM Setter Hook & Zero-Flash Lock!"); 
 })();
