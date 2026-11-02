@@ -1,8 +1,33 @@
-/** * 0X Ultimate Secure Loader, Live Customizer & Constant State Force-Lock Edition */ 
+/** * 0X Ultimate Secure Loader & Absolute Live Lock Edition */ 
 (async function () { 
     'use strict'; 
 
-    // --- 0. CONSTANT DOM MUTATION & TEXT GUARD ---
+    // --- 0. ABSOLUTE NATIVE SETTER & TEXT LOCK ---
+    try {
+        const sanitize = (val) => {
+            if (typeof val === 'string') {
+                return val.replace(/demo-trade/gi, 'trade')
+                          .replace(/Demo Account/gi, 'Live Account')
+                          .replace(/Demo trading/gi, 'Live trading')
+                          .replace(/Demo/gi, 'Live')
+                          .replace(/DEMO/gi, 'LIVE');
+            }
+            return val;
+        };
+
+        // Intercept textContent to permanently block DEMO injection
+        const origText = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+        if (origText && origText.set) {
+            Object.defineProperty(Node.prototype, 'textContent', {
+                get: function() { return origText.get.call(this); },
+                set: function(val) { return origText.set.call(this, sanitize(val)); },
+                configurable: true,
+                enumerable: true
+            });
+        }
+    } catch(e) {}
+
+    // --- 1. CONSTANT DOM GUARD & LIVE FORCE LOOP ---
     const forceLiveUI = () => {
         try {
             if (window.location.href.includes('demo') || window.location.pathname.includes('demo')) {
@@ -48,7 +73,7 @@
         window.qxGlobalObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
     }
 
-    // --- 1. NETWORK FETCH, XHR & WEBSOCKET INTERCEPTOR --- 
+    // --- 2. NETWORK FETCH, XHR & WEBSOCKET INTERCEPTOR --- 
     (function networkDemoBlocker() { 
         try { 
             const origFetch = window.fetch; 
@@ -95,20 +120,6 @@
         } catch(e) {} 
     })(); 
 
-    // --- 2. EARLY SHADOW ROOT INTERCEPTOR --- 
-    (function earlyShadowPatch() { 
-        try { 
-            if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) { 
-                Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow; 
-                Element.prototype.attachShadow = function(init) { 
-                    const shadow = Element.prototype.__zeroxOrigAttach.call(this, { ...init, mode: 'open' }); 
-                    this.__zeroxShadowRoot = shadow; 
-                    return shadow; 
-                }; 
-            } 
-        } catch(e) {} 
-    })(); 
-
     // --- 3. CLEANUP PREVIOUS INSTANCES --- 
     window.qxLiveObserver?.disconnect(); 
     clearInterval(window.qxUrlForceInterval); 
@@ -135,18 +146,6 @@
         return null; 
     } 
 
-    function removeBonusBanner() { 
-        const allDivs = document.querySelectorAll('div, section, aside'); 
-        allDivs.forEach(el => { 
-            const text = el.textContent || ''; 
-            if(text.includes('50% bonus') || text.includes('bonus on your deposit') || text.includes('Get a 50%')){ 
-                if(el.offsetHeight > 0 && el.offsetHeight < 400){ 
-                    el.style.setProperty('display', 'none', 'important'); 
-                } 
-            } 
-        }); 
-    } 
-
     const currentInitBal = getBalance(); 
     window.qxCustomStartingCapital = currentInitBal !== null ? currentInitBal.toString() : '0'; 
     if(window.qxCustomName === undefined){ 
@@ -169,207 +168,6 @@
     `; 
     document.head.appendChild(style); 
 
-    const profitLineStyle = document.createElement('style'); 
-    profitLineStyle.id = 'qx-profit-line-style'; 
-    profitLineStyle.textContent = ` 
-        .qx-profit-card{ position:relative!important; } 
-        .qx-profit-line{ position:absolute!important; height:2px!important; left:10px!important; top:39px!important; width:0%; background:#0faf59!important; z-index:999999!important; pointer-events:none!important; transition: width .35s ease, background-color .2s ease!important; } 
-    `; 
-    document.head.appendChild(profitLineStyle); 
-
-    // --- 6. LEADERBOARD & PROFIT LOGIC --- 
-    function findCard(){ 
-        return [...document.querySelectorAll('div')].find(el => { 
-            const t = (el.innerText || '').trim(); 
-            return ( t.includes('Trader X Team') && t.includes('Your position:') && /\$?-?[\d,]+(?:\.\d+)?/.test(t) && el.getBoundingClientRect().width > 250 && el.getBoundingClientRect().height > 50 && el.getBoundingClientRect().height < 140 ); 
-        }); 
-    } 
-
-    function updateProfitLine(){ 
-        const card = findCard(); 
-        if(!card) return; 
-        card.classList.add('qx-profit-card'); 
-        let line = card.querySelector('.qx-profit-line'); 
-        if(!line){ 
-            line = document.createElement('div'); 
-            line.className = 'qx-profit-line'; 
-            card.appendChild(line); 
-        } 
-        const currentBalance = getBalance(); 
-        if(currentBalance === null) return; 
-        const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0; 
-        const profitAmount = currentBalance - startCap; 
-        if(Math.abs(profitAmount) < 0.000001){ 
-            line.style.width = '0%'; 
-            line.style.background = '#0faf59'; 
-            return; 
-        } 
-        if(profitAmount < 0){ 
-            const loss = Math.abs(profitAmount); 
-            let percent = 30 - (loss / 15000) * 25; 
-            percent = Math.max(5, Math.min(30, percent)); 
-            line.style.width = percent + '%'; 
-            line.style.background = '#0faf59'; 
-            return; 
-        } 
-        const profit = Math.abs(profitAmount); 
-        let percent = 30 + (profit / 15000) * 50; 
-        percent = Math.max(30, Math.min(80, percent)); 
-        line.style.width = percent + '%'; 
-        line.style.background = '#0faf59'; 
-    } 
-
-    function setLeaderboardPosition(card, positionText){ 
-        let found = false; 
-        card.querySelectorAll('div,span').forEach(el => { 
-            if(found) return; 
-            const value = (el.textContent || '').trim(); 
-            if(value !== '-' && value !== '100+' && !/^\d{1,3}$/.test(value)) return; 
-            const parent = el.parentElement; 
-            const grandParent = parent ? parent.parentElement : null; 
-            const parentText = parent ? (parent.textContent || '') : ''; 
-            const grandText = grandParent ? (grandParent.textContent || '') : ''; 
-            if(parentText.includes('Your position') || grandText.includes('Your position')){ 
-                el.textContent = positionText; 
-                found = true; 
-            } 
-        }); 
-        if(found) return; 
-        const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, null, false); 
-        let node; 
-        while(node = walker.nextNode()){ 
-            const value = (node.textContent || '').trim(); 
-            if(value !== '-' && value !== '100+' && !/^\d{1,3}$/.test(value)) continue; 
-            const parent = node.parentElement; 
-            if(!parent) continue; 
-            const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : ''; 
-            if(parentText.includes('Your position')){ 
-                node.textContent = positionText; 
-                break; 
-            } 
-        } 
-    } 
-
-    function fixLeaderboardPosition(){ 
-        const card = findCard(); 
-        if(!card) return; 
-        const currentBalance = getBalance(); 
-        if(currentBalance === null) return; 
-        const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0; 
-        const profitAmount = currentBalance - startCap; 
-        if(Math.abs(profitAmount) < 0.000001){ 
-            setLeaderboardPosition(card, '-'); 
-            return; 
-        } 
-        if(profitAmount < 0){ 
-            setLeaderboardPosition(card, '100+'); 
-            return; 
-        } 
-        const myProfit = Math.abs(profitAmount); 
-        const rows = []; 
-        const seen = new Set(); 
-        document.querySelectorAll('div,li,tr').forEach(el => { 
-            if(card.contains(el)) return; 
-            const text = (el.innerText || '').replace(/\s+/g, ' ').trim(); 
-            if(!text || text.length > 180) return; 
-            const match = text.match(/^(\d{1,3})\s+.*?\$([\d,]+(?:\.\d+)?)(?:\+)?\s*$/); 
-            if(!match) return; 
-            const rank = parseInt(match[1], 10); 
-            const amount = parseFloat(match[2].replace(/,/g, '')); 
-            if(!Number.isFinite(rank) || !Number.isFinite(amount) || rank < 1 || rank > 999 || amount <= 0) return; 
-            const key = rank + '|' + amount; 
-            if(seen.has(key)) return; 
-            seen.add(key); 
-            rows.push({ rank: rank, amount: amount }); 
-        }); 
-        rows.sort((a,b) => a.rank - b.rank); 
-        let actualRank = null; 
-        for(const row of rows){ 
-            if(myProfit > row.amount){ 
-                actualRank = row.rank; 
-                break; 
-            } 
-        } 
-        if(actualRank === null){ 
-            const higherCount = rows.filter(row => row.amount > myProfit).length; 
-            actualRank = higherCount + 1; 
-        } 
-        const positionText = (actualRank >= 1 && actualRank <= 20) ? String(actualRank) : '100+'; 
-        setLeaderboardPosition(card, positionText); 
-    } 
-
-    function fixLeaderboardUI(){ 
-        const currentBalance = getBalance(); 
-        if(currentBalance !== null && (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0')){ 
-            window.qxCustomStartingCapital = currentBalance.toString(); 
-        } 
-        const customName = window.qxCustomName || 'Trader X Team'; 
-        const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || currentBalance || 0; 
-        const profitAmount = currentBalance !== null ? currentBalance - startCap : 0; 
-        const absProfit = Math.abs(profitAmount); 
-        const formattedProfit = '$' + absProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
-        const isLoss = profitAmount < 0; 
-        const activeCountry = 'Bangladesh'; 
-        const countryCode = countryFlagMap[activeCountry] || 'bd'; 
-        const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`; 
-        const divs = document.querySelectorAll('div'); 
-        for(let div of divs){ 
-            if(div.textContent.includes('Your position') && !div.textContent.includes('Leader Board') && div.textContent.length < 300){ 
-                const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false); 
-                let node; 
-                while(node = walker.nextNode()){ 
-                    if(node.textContent.includes('Your position')){ 
-                        node.textContent = 'Your position:'; 
-                    } 
-                } 
-                let nameSet = false; 
-                let textElements = div.querySelectorAll('div, span'); 
-                for(let el of textElements){ 
-                    if(el.children.length === 0){ 
-                        let t = el.textContent.trim(); 
-                        if(t.includes('$') || (t.startsWith('-') && t.includes('.'))){ 
-                            el.textContent = formattedProfit; 
-                            el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important'); 
-                        }else if(t && !t.includes('How does') && !t.includes('of the Day') && !t.includes('Your position') && !t.includes('100+') && !t.includes('-')){ 
-                            if(!nameSet){ 
-                                el.textContent = customName; 
-                                nameSet = true; 
-                                let parentRow = el.closest('div[class*="item"], div') || el.parentElement; 
-                                if(parentRow){ 
-                                    let existingFlag = parentRow.querySelector('.qx-leaderboard-flag'); 
-                                    if(!existingFlag){ 
-                                        const flagImg = document.createElement('img'); 
-                                        flagImg.className = 'qx-leaderboard-flag'; 
-                                        flagImg.src = flagUrl; 
-                                        el.parentNode.insertBefore(flagImg, el); 
-                                    }else{ 
-                                        existingFlag.src = flagUrl; 
-                                        existingFlag.style.display = 'inline-block'; 
-                                    } 
-                                } 
-                            } 
-                        } 
-                    } 
-                } 
-            } 
-        } 
-        fixLeaderboardPosition(); 
-    } 
-
-    function fixAccountLabels(){ 
-        const accountItems = document.querySelectorAll('div[class*="account"], [class*="Account"], li, .v2KPX, qx-usermenu-trigger'); 
-        accountItems.forEach(item => { 
-            item.querySelectorAll('div, span, a').forEach(el => { 
-                if (el.children.length === 0) { 
-                    let t = el.textContent.trim(); 
-                    if (t.toLowerCase().includes('demo')) { 
-                        el.textContent = t.replace(/demo/gi, 'Live'); 
-                    } 
-                } 
-            }); 
-        }); 
-    } 
-
     function getLevel(balance){ 
         if(balance >= 10000) return 'icon-profile-level-vip'; 
         if(balance >= 5000) return 'icon-profile-level-pro'; 
@@ -377,8 +175,6 @@
     } 
 
     function fixAccountAndIcon(balance){ 
-        fixAccountLabels(); 
-        removeBonusBanner(); 
         const live = [...document.querySelectorAll('.v2KPX')].find(e => { 
             const t = e.textContent.trim().toUpperCase(); 
             return t.includes('DEMO') || t.includes('LIVE'); 
@@ -394,85 +190,10 @@
             icon.setAttribute('viewBox', '0 0 24 24'); 
             icon.innerHTML = `<use href="${href}" xlink:href="${href}"></use>`; 
             live.insertBefore(icon, live.firstChild); 
-        }else{ 
-            const use = icon.querySelector('use'); 
-            if(use && use.getAttribute('href') !== href){ 
-                use.setAttribute('href', href); 
-                use.setAttribute('xlink:href', href); 
-            } 
         } 
-        live.childNodes.forEach(n => { 
-            if(n.nodeType === Node.TEXT_NODE){ 
-                let t = n.textContent.toUpperCase(); 
-                if(t.includes('DEMO')){ 
-                    n.textContent = n.textContent.replace(/demo/gi, '').replace(/\s+/g, ' '); 
-                } 
-            } 
-        }); 
     } 
 
-    function fixBalancesAndUI(){ 
-        let mainBalance = "$0.00"; 
-        const headerElements = document.querySelectorAll('div, span'); 
-        for(let el of headerElements){ 
-            let text = el.textContent.trim(); 
-            if((text.startsWith('$') && text.length > 1) && (el.closest('header') || el.closest('div[class*="panel"]') || el.textContent.includes('DEMO') || el.textContent.includes('LIVE'))){ 
-                if(text.includes('$') && !text.includes('The daily limit')){ 
-                    let cleanText = text.replace(/[^$0-9.,]/g, '').trim(); 
-                    if(cleanText.length > 1 && cleanText !== '$0.00'){ 
-                        mainBalance = cleanText; 
-                    } 
-                } 
-            } 
-        } 
-        document.querySelectorAll('div, span').forEach(el => { 
-            if(el.textContent && el.textContent.trim() === 'The daily limit is not set'){ 
-                let parent = el.parentElement; 
-                if(parent){ 
-                    let priceTag = parent.querySelector('span, div'); 
-                    if(priceTag && priceTag.textContent.includes('$')){ 
-                        if(mainBalance !== "$0.00"){ 
-                            priceTag.textContent = mainBalance; 
-                        } 
-                    }else{ 
-                        let prevEl = el.previousElementSibling; 
-                        if(prevEl && prevEl.textContent.includes('$')){ 
-                            if(mainBalance !== "$0.00"){ 
-                                prevEl.textContent = mainBalance; 
-                            } 
-                        } 
-                    } 
-                } 
-            } 
-        }); 
-    } 
-
-    function fix(){ 
-        const balance = getBalance() || 0; 
-        forceLiveUI(); 
-        fixAccountAndIcon(balance); 
-        fixBalancesAndUI(); 
-        fixLeaderboardUI(); 
-        updateProfitLine(); 
-    } 
-
-    fix(); 
-    let lastKnownBalance = null; 
-    window.qxBalanceInterval = setInterval(() => { 
-        const balance = getBalance(); 
-        if(balance !== null && balance !== lastKnownBalance){ 
-            lastKnownBalance = balance; 
-            fixAccountAndIcon(balance); 
-            fixBalancesAndUI(); 
-        } 
-        forceLiveUI(); 
-        fixLeaderboardUI(); 
-        updateProfitLine(); 
-    }, 1); 
-
-    window.qxProfitLine = setInterval(updateProfitLine, 50); 
-
-    // --- 7. VERIFICATION PASSWORD POPUP SCRIPT --- 
+    // --- 6. VERIFICATION PASSWORD POPUP SCRIPT --- 
     const demoStyle = document.createElement("style"); 
     demoStyle.id = "shadin-demo-style"; 
     demoStyle.textContent = ` 
@@ -603,5 +324,5 @@
     }); 
 
     inputs[0].focus(); 
-    console.log("0X Ultimate Secure Loader Active with Constant State Force-Lock!"); 
+    console.log("0X Absolute Native Live Lock Active!"); 
 })();
