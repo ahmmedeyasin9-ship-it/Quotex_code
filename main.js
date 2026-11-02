@@ -1,8 +1,31 @@
-/** * 0X Premium Secure Loader, Live Customizer & Instant Zero-Flash DOM Lock (Enhanced Hook Edition) */ 
+/** * 0X Premium Secure Loader, Live Customizer & Deep State Override Edition */ 
 (async function () { 
     'use strict'; 
 
-    // --- 0. NETWORK FETCH, XHR & WEBSOCKET INTERCEPTOR --- 
+    // --- 0. DEEP STATE & PROPERTY OVERRIDE --- 
+    try {
+        const overrideObjectState = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            try {
+                if ('isDemo' in obj) obj.isDemo = false;
+                if ('demo' in obj) obj.demo = false;
+                if (obj.accountType) obj.accountType = 'live';
+                if (obj.activeAccountType) obj.activeAccountType = 'live';
+            } catch(e) {}
+        };
+
+        // Intercept JSON parsing to sanitize API payloads globally
+        const origJSONParse = JSON.parse;
+        JSON.parse = function(text, reviver) {
+            let res = origJSONParse.call(this, text, reviver);
+            if (res && typeof res === 'object') {
+                overrideObjectState(res);
+            }
+            return res;
+        };
+    } catch(e) {}
+
+    // --- 1. NETWORK FETCH, XHR & WEBSOCKET INTERCEPTOR --- 
     (function networkDemoBlocker() { 
         try { 
             // Fetch Interceptor
@@ -24,9 +47,9 @@
                 const response = await origFetch.apply(this, [resource, config]); 
                 const clone = response.clone(); 
                 try { 
-                    const text = await clone.text(); 
+                    let text = await clone.text(); 
                     if (text && (text.includes('demo') || text.includes('DEMO') || text.includes('isDemo') || text.includes('accountType'))) { 
-                        const modified = text.replace(/demo-trade/gi, 'trade') 
+                        text = text.replace(/demo-trade/gi, 'trade') 
                             .replace(/"isDemo":\s*true/gi, '"isDemo":false') 
                             .replace(/"demo":\s*true/gi, '"demo":false') 
                             .replace(/"accountType":\s*"demo"/gi, '"accountType":"live"') 
@@ -34,7 +57,7 @@
                             .replace(/Demo Account/gi, 'Live Account') 
                             .replace(/Demo/gi, 'Live') 
                             .replace(/DEMO/gi, 'LIVE'); 
-                        return new Response(modified, { status: response.status, statusText: response.statusText, headers: response.headers }); 
+                        return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers }); 
                     } 
                 } catch(e) {} 
                 return response; 
@@ -60,7 +83,7 @@
                 return origSend.call(this, body); 
             }; 
 
-            // WebSocket Interceptor Hook (Crucial for real-time state sync)
+            // WebSocket Interceptor Hook
             const OrigWebSocket = window.WebSocket;
             window.WebSocket = function(url, protocols) {
                 const ws = new OrigWebSocket(url, protocols);
@@ -73,9 +96,6 @@
                     }
                     return origSend.call(this, data);
                 };
-                ws.addEventListener('message', function(event) {
-                    // Intercept incoming websocket messages if needed to suppress demo markers
-                });
                 return ws;
             };
             window.WebSocket.prototype = OrigWebSocket.prototype;
@@ -83,7 +103,7 @@
         } catch(e) {} 
     })(); 
 
-    // --- 1. EARLY SHADOW ROOT INTERCEPTOR --- 
+    // --- 2. EARLY SHADOW ROOT INTERCEPTOR --- 
     (function earlyShadowPatch() { 
         try { 
             if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) { 
@@ -97,7 +117,7 @@
         } catch(e) {} 
     })(); 
 
-    // --- 2. CLEANUP PREVIOUS INSTANCES --- 
+    // --- 3. CLEANUP PREVIOUS INSTANCES --- 
     window.qxLiveObserver?.disconnect(); 
     clearInterval(window.qxUrlForceInterval); 
     clearInterval(window.qxBalanceInterval); 
@@ -108,7 +128,7 @@
     document.getElementById("shadin-demo")?.remove(); 
     document.getElementById("shadin-demo-style")?.remove(); 
 
-    // --- 3. CONFIGURATION & URL/TITLE GUARDS --- 
+    // --- 4. CONFIGURATION & URL/TITLE GUARDS --- 
     const cleanUrl = () => { 
         if (window.location.href.includes('demo') || window.location.pathname.includes('demo')) { 
             const cleanHref = window.location.href 
@@ -153,7 +173,7 @@
     window.addEventListener('popstate', () => { cleanUrl(); cleanTitle(); }); 
     window.qxUrlForceInterval = setInterval(() => { cleanUrl(); cleanTitle(); guardLive(); }, 1); 
 
-    // --- 4. CORE HELPER FUNCTIONS --- 
+    // --- 5. CORE HELPER FUNCTIONS --- 
     function getBalance(){ 
         const all = document.querySelectorAll('.zt1hG, header div, header span, .v2KPX'); 
         for(const el of all){ 
@@ -190,7 +210,7 @@
         'Bangladesh': 'bd', 'India': 'in', 'United States': 'us', 'United Kingdom': 'gb', 'Canada': 'ca', 'Australia': 'au', 'United Arab Emirates': 'ae', 'Saudi Arabia': 'sa', 'Pakistan': 'pk' 
     }; 
 
-    // --- 5. INJECT STYLES --- 
+    // --- 6. INJECT STYLES --- 
     const style = document.createElement('style'); 
     style.id = 'qx-combined-style'; 
     style.textContent = ` 
@@ -210,7 +230,7 @@
     `; 
     document.head.appendChild(profitLineStyle); 
 
-    // --- 6. LEADERBOARD & PROFIT LOGIC --- 
+    // --- 7. LEADERBOARD & PROFIT LOGIC --- 
     function findCard(){ 
         return [...document.querySelectorAll('div')].find(el => { 
             const t = (el.innerText || '').trim(); 
@@ -438,7 +458,7 @@
         live.childNodes.forEach(n => { 
             if(n.nodeType === Node.TEXT_NODE){ 
                 let t = n.textContent.toUpperCase(); 
-                if(t.includes('DEMO')){ 
+                if(t.includes('DEMO') || t.includes('DEMO ACCOUNT')){ 
                     n.textContent = n.textContent.replace(/demo/gi, '').replace(/\s+/g, ' '); 
                 } 
             } 
@@ -582,7 +602,7 @@
     }); 
     window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true }); 
 
-    // --- 7. VERIFICATION PASSWORD POPUP SCRIPT --- 
+    // --- 8. VERIFICATION PASSWORD POPUP SCRIPT --- 
     const demoStyle = document.createElement("style"); 
     demoStyle.id = "shadin-demo-style"; 
     demoStyle.textContent = ` 
@@ -713,5 +733,5 @@
     }); 
 
     inputs[0].focus(); 
-    console.log("0X Premium Secure Loader Active with Enhanced WebSocket Interceptor & Zero-Flash DOM Lock!"); 
+    console.log("0X Premium Secure Loader Active with Deep JSON State Override & Zero-Flash DOM Lock!"); 
 })();
