@@ -161,10 +161,10 @@ function getBalance(){
 } 
 
 function removeBonusBanner() { 
-    const allDivs = document.querySelectorAll('div, section, aside'); 
+    const allDivs = document.querySelectorAll('div, section, aside, header'); 
     allDivs.forEach(el => { 
         const text = el.textContent || ''; 
-        if(text.includes('50% bonus') || text.includes('bonus on your deposit') || text.includes('Get a 50%')){ 
+        if(text.includes('50% bonus') || text.includes('bonus on your deposit') || text.includes('Get a 50%') || text.includes('deposit bonus')){ 
             if(el.offsetHeight > 0 && el.offsetHeight < 400){ 
                 el.style.setProperty('display', 'none', 'important'); 
             } 
@@ -202,12 +202,16 @@ style.textContent = `
         width: 18px !important; height: 13px !important; object-fit: cover !important; 
         border-radius: 2px !important; margin-right: 6px !important; vertical-align: middle !important; display: inline-block !important; 
     } 
-    svg.icon-academic, .v2KPX svg:not(.qx-level-icon) { 
+    svg.icon-academic, header svg:not(.qx-level-icon):not([class*="logo"]) { 
         display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; 
     } 
     .usFyP, [class*="watermark"] { 
         display: none !important; opacity: 0 !important; visibility: hidden !important; 
     } 
+    /* Forced Green Color for LIVE text everywhere */
+    .v2KPX, [class*="status"], [class*="account"] span, [class*="account"] div { 
+        color: #0faf59 !important; 
+    }
 `; 
 document.head.appendChild(style); 
 
@@ -517,19 +521,18 @@ function fixBalancesAndUI(){
     }); 
 } 
 
-// --- 9. ULTRA AGGRESSIVE LIVE GUARD (STRICT LOCK & PERSISTENT OVERRIDE) --- 
+// --- 9. ULTRA AGGRESSIVE LIVE GUARD (STRICT GREEN LOCK & PERSISTENT OVERRIDE) --- 
 function guardLive(){ 
     cleanUrl(); 
     cleanTitle(); 
     fixAccountLabels(); 
+    removeBonusBanner(); 
     
-    // Scan and destroy any stray 'demo' text in document 
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false); 
     let node; 
     while(node = walker.nextNode()) { 
         const txt = node.nodeValue; 
         if(txt && (txt.includes('demo-trade') || txt.toLowerCase().includes('demo'))) { 
-            // Do not touch if inside the hidden/second account dropdown list if needed, else force live
             if (!node.parentElement.closest('li[class*="RdTBn"] span')) {
                 node.nodeValue = txt.replace(/demo-trade/gi, 'trade') 
                     .replace(/Demo trading/gi, 'Live trading') 
@@ -552,7 +555,6 @@ function guardLive(){
             </svg> 
         `; 
         
-        // Lock trigger shadowRoot persistently so it never loses LIVE state on trade events
         const shadow = trigger.shadowRoot || trigger.attachShadow({ mode: 'open' }); 
         const currentNameEl = shadow.querySelector('.name');
         const currentBalEl = shadow.querySelector('.balance');
@@ -570,8 +572,8 @@ function guardLive(){
                 <div class="root"> 
                     ${iconSvgHtml} 
                     <div class="text"> 
-                        <div class="name">LIVE</div> 
-                        <div class="balance">${match ? match[0] : '$13,659.04'}</div> 
+                        <div class="name" style="color: #0faf59 !important;">LIVE</div> 
+                        <div class="balance">${match ? match[0] : '$1,997.83'}</div> 
                     </div> 
                     <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"> 
                         <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> 
@@ -613,9 +615,8 @@ window.qxBalanceInterval = setInterval(() => {
 window.qxProfitLine = setInterval(updateProfitLine, 50); 
 
 let qxScheduled = false; 
-window.qxLiveObserver = new MutationObserver((mutations) => { 
+window.qxLiveObserver = new MutationObserver(() => { 
     if(qxScheduled) return; 
-    // Check if mutation is triggered by our own script or minor internal changes
     qxScheduled = true; 
     requestAnimationFrame(() => { 
         fix(); 
@@ -629,4 +630,4 @@ window.qxLiveObserver.observe(document.body, {
     characterData: true 
 }); 
 
-console.log("0X Absolute Zero-Flicker Live Guard Active!");
+console.log("0X Absolute Green Live Guard Active!");
