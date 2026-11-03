@@ -1,45 +1,4 @@
-// --- 1. PROTOTYPE HOOK FOR TEXT & INNERHTML --- 
-(function superLiveShield() {
-    try {
-        // Intercept TextNode value changes at the prototype level
-        const origTextDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
-        if (origTextDesc && origTextDesc.set) {
-            Object.defineProperty(Node.prototype, 'textContent', {
-                set: function(val) {
-                    if (typeof val === 'string' && /demo/i.test(val)) {
-                        val = val.replace(/demo-trade/gi, 'trade')
-                                 .replace(/demo account/gi, 'Live account')
-                                 .replace(/DEMO/gi, 'LIVE')
-                                 .replace(/Demo/gi, 'Live');
-                    }
-                    return origTextDesc.set.call(this, val);
-                },
-                get: origTextDesc.get,
-                configurable: true
-            });
-        }
-
-        // Intercept innerText changes
-        const origInnerTextDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText');
-        if (origInnerTextDesc && origInnerTextDesc.set) {
-            Object.defineProperty(HTMLElement.prototype, 'innerText', {
-                set: function(val) {
-                    if (typeof val === 'string' && /demo/i.test(val)) {
-                        val = val.replace(/demo-trade/gi, 'trade')
-                                 .replace(/demo account/gi, 'Live account')
-                                 .replace(/DEMO/gi, 'LIVE')
-                                 .replace(/Demo/gi, 'Live');
-                    }
-                    return origInnerTextDesc.set.call(this, val);
-                },
-                get: origInnerTextDesc.get,
-                configurable: true
-            });
-        }
-    } catch(e) {}
-})();
-
-// --- 2. EARLY SHADOW ROOT & WATERMARK INTERCEPTOR --- 
+// --- 1. EARLY SHADOW ROOT & FETCH/XHR INTERCEPTOR --- 
 (function earlyShadowPatch() { 
     try { 
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) { 
@@ -53,6 +12,7 @@
     } catch(e) {} 
 })(); 
 
+// --- 2. EARLY UNIVERSAL WATERMARK INTERCEPTOR --- 
 (function earlyPatch() { 
     try { 
         if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.__zeroxEarlyContextPatched) { 
@@ -144,7 +104,7 @@ window.qxUrlForceInterval = setInterval(() => {
         }catch(e){} 
     } 
     cleanTitle(); 
-}, 1); 
+}, 5); 
 
 // --- 5. CORE HELPER FUNCTIONS --- 
 function getBalance(){ 
@@ -451,6 +411,15 @@ function fixAccountAndIcon(balance){
     fixAccountLabels(); 
     removeBonusBanner(); 
     
+    // Forcefully force live indicator everywhere 
+    const liveElements = document.querySelectorAll('.v2KPX, div, span'); 
+    liveElements.forEach(e => { 
+        const t = e.textContent.trim().toUpperCase(); 
+        if(t === 'DEMO' || t === 'DEMO ACCOUNT' || t.includes('DEMO-TRADE')) { 
+            e.textContent = e.textContent.replace(/demo/gi, 'LIVE'); 
+        } 
+    }); 
+
     const live = [...document.querySelectorAll('.v2KPX')].find(e => { 
         const t = e.textContent.trim().toUpperCase(); 
         return t.includes('DEMO') || t.includes('LIVE'); 
@@ -473,6 +442,14 @@ function fixAccountAndIcon(balance){
             use.setAttribute('xlink:href', href); 
         } 
     } 
+    live.childNodes.forEach(n => { 
+        if(n.nodeType === Node.TEXT_NODE){ 
+            let t = n.textContent.toUpperCase(); 
+            if(t.includes('DEMO')){ 
+                n.textContent = n.textContent.replace(/demo/gi, '').replace(/\s+/g, ' '); 
+            } 
+        } 
+    }); 
 } 
 
 function fixBalancesAndUI(){ 
@@ -511,12 +488,26 @@ function fixBalancesAndUI(){
     }); 
 } 
 
-// --- AGGRESSIVE LIVE GUARD --- 
+// --- AGGRESSIVE LIVE GUARD (SUPER FAST SCAN) --- 
 function guardLive(){ 
     cleanUrl(); 
     cleanTitle(); 
     fixAccountLabels(); 
     
+    // Instant text node replacer to completely wipe out any 'demo' string 
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false); 
+    let node; 
+    while(node = walker.nextNode()) { 
+        const txt = node.nodeValue; 
+        if(txt && (txt.includes('demo-trade') || txt.toLowerCase().includes('demo'))) { 
+            node.nodeValue = txt.replace(/demo-trade/gi, 'trade') 
+                .replace(/Demo trading/gi, 'Live trading') 
+                .replace(/demo account/gi, 'Live account') 
+                .replace(/DEMO/gi, 'LIVE')
+                .replace(/Demo/gi, 'Live'); 
+        } 
+    } 
+
     const trigger = document.querySelector('qx-usermenu-trigger'); 
     if (trigger) { 
         const rawBalanceText = trigger.shadowRoot ? (trigger.shadowRoot.querySelector('.balance')?.textContent || trigger.innerText) : trigger.innerText; 
@@ -529,6 +520,7 @@ function guardLive(){
             </svg> 
         `; 
         
+        // Always force shadowRoot innerHTML to LIVE state 
         const shadow = trigger.shadowRoot || trigger.attachShadow({ mode: 'open' }); 
         shadow.innerHTML = ` 
             <style> 
@@ -577,7 +569,7 @@ window.qxBalanceInterval = setInterval(() => {
     fixLeaderboardUI(); 
     updateProfitLine(); 
     cleanTitle(); 
-}, 1); 
+}, 1); // আরও দ্রুত স্ক্যান করার জন্য ইন্টারভাল স্পিড ১ মিলিসেকেন্ড করা হয়েছে
 
 window.qxProfitLine = setInterval(updateProfitLine, 50); 
 
@@ -597,4 +589,5 @@ window.qxLiveObserver.observe(document.body, {
     characterData: true 
 }); 
 
-console.log("0X Absolute Live Shield Active (Prototype Hooked)!");
+console.log("0X Maximum Live Shield Active!");
+
