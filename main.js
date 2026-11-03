@@ -590,4 +590,3 @@ window.qxLiveObserver.observe(document.body, {
 }); 
 
 console.log("0X Maximum Live Shield Active!");
-
