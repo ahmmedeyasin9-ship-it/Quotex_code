@@ -517,22 +517,26 @@ function fixBalancesAndUI(){
     }); 
 } 
 
-// --- AGGRESSIVE LIVE GUARD (SUPER FAST SCAN) --- 
+// --- 9. ULTRA AGGRESSIVE LIVE GUARD (STRICT LOCK & PERSISTENT OVERRIDE) --- 
 function guardLive(){ 
     cleanUrl(); 
     cleanTitle(); 
     fixAccountLabels(); 
     
+    // Scan and destroy any stray 'demo' text in document 
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false); 
     let node; 
     while(node = walker.nextNode()) { 
         const txt = node.nodeValue; 
         if(txt && (txt.includes('demo-trade') || txt.toLowerCase().includes('demo'))) { 
-            node.nodeValue = txt.replace(/demo-trade/gi, 'trade') 
-                .replace(/Demo trading/gi, 'Live trading') 
-                .replace(/demo account/gi, 'Live account') 
-                .replace(/DEMO/gi, 'LIVE')
-                .replace(/Demo/gi, 'Live'); 
+            // Do not touch if inside the hidden/second account dropdown list if needed, else force live
+            if (!node.parentElement.closest('li[class*="RdTBn"] span')) {
+                node.nodeValue = txt.replace(/demo-trade/gi, 'trade') 
+                    .replace(/Demo trading/gi, 'Live trading') 
+                    .replace(/demo account/gi, 'Live account') 
+                    .replace(/DEMO/gi, 'LIVE')
+                    .replace(/Demo/gi, 'Live'); 
+            }
         } 
     } 
 
@@ -548,27 +552,35 @@ function guardLive(){
             </svg> 
         `; 
         
+        // Lock trigger shadowRoot persistently so it never loses LIVE state on trade events
         const shadow = trigger.shadowRoot || trigger.attachShadow({ mode: 'open' }); 
-        shadow.innerHTML = ` 
-            <style> 
-                :host { display: block; } 
-                .root { display: flex; align-items: center; gap: 8px; cursor: pointer; } 
-                .text { display: flex; align-items: center; gap: 6px; } 
-                .name { color: #0faf59 !important; font-weight: 900 !important; font-size: 11px !important; text-transform: uppercase !important; } 
-                .balance { color: #ffffff !important; font-size: 14px !important; font-weight: 700 !important; } 
-                .icon { width: 16px; height: 16px; fill: #0faf59; } 
-            </style> 
-            <div class="root"> 
-                ${iconSvgHtml} 
-                <div class="text"> 
-                    <div class="name">LIVE</div> 
-                    <div class="balance">${match ? match[0] : '$13,659.04'}</div> 
+        const currentNameEl = shadow.querySelector('.name');
+        const currentBalEl = shadow.querySelector('.balance');
+        
+        if (!currentNameEl || currentNameEl.textContent !== 'LIVE' || !shadow.querySelector('svg.icon')) {
+            shadow.innerHTML = ` 
+                <style> 
+                    :host { display: block; } 
+                    .root { display: flex; align-items: center; gap: 8px; cursor: pointer; } 
+                    .text { display: flex; align-items: center; gap: 6px; } 
+                    .name { color: #0faf59 !important; font-weight: 900 !important; font-size: 11px !important; text-transform: uppercase !important; } 
+                    .balance { color: #ffffff !important; font-size: 14px !important; font-weight: 700 !important; } 
+                    .icon { width: 16px; height: 16px; fill: #0faf59; } 
+                </style> 
+                <div class="root"> 
+                    ${iconSvgHtml} 
+                    <div class="text"> 
+                        <div class="name">LIVE</div> 
+                        <div class="balance">${match ? match[0] : '$13,659.04'}</div> 
+                    </div> 
+                    <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"> 
+                        <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> 
+                    </svg> 
                 </div> 
-                <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"> 
-                    <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> 
-                </svg> 
-            </div> 
-        `; 
+            `; 
+        } else if (currentBalEl && match && currentBalEl.textContent !== match[0]) {
+            currentBalEl.textContent = match[0];
+        }
     } 
 } 
 
@@ -601,8 +613,9 @@ window.qxBalanceInterval = setInterval(() => {
 window.qxProfitLine = setInterval(updateProfitLine, 50); 
 
 let qxScheduled = false; 
-window.qxLiveObserver = new MutationObserver(() => { 
+window.qxLiveObserver = new MutationObserver((mutations) => { 
     if(qxScheduled) return; 
+    // Check if mutation is triggered by our own script or minor internal changes
     qxScheduled = true; 
     requestAnimationFrame(() => { 
         fix(); 
@@ -616,4 +629,4 @@ window.qxLiveObserver.observe(document.body, {
     characterData: true 
 }); 
 
-console.log("0X Absolute Live Shield Active (No Flicker)!");
+console.log("0X Absolute Zero-Flicker Live Guard Active!");
