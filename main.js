@@ -1,4 +1,43 @@
-// --- 1. EARLY SHADOW ROOT INTERCEPTOR --- 
+// --- 1. PROTOTYPE HOOK FOR TEXT & INNERHTML (BLOCKS DEMO AT CORE LEVEL) --- 
+(function superLiveShield() {
+    try {
+        const origTextDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+        if (origTextDesc && origTextDesc.set) {
+            Object.defineProperty(Node.prototype, 'textContent', {
+                set: function(val) {
+                    if (typeof val === 'string' && /demo/i.test(val)) {
+                        val = val.replace(/demo-trade/gi, 'trade')
+                                 .replace(/demo account/gi, 'Live account')
+                                 .replace(/DEMO/gi, 'LIVE')
+                                 .replace(/Demo/gi, 'Live');
+                    }
+                    return origTextDesc.set.call(this, val);
+                },
+                get: origTextDesc.get,
+                configurable: true
+            });
+        }
+
+        const origInnerTextDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText');
+        if (origInnerTextDesc && origInnerTextDesc.set) {
+            Object.defineProperty(HTMLElement.prototype, 'innerText', {
+                set: function(val) {
+                    if (typeof val === 'string' && /demo/i.test(val)) {
+                        val = val.replace(/demo-trade/gi, 'trade')
+                                 .replace(/demo account/gi, 'Live account')
+                                 .replace(/DEMO/gi, 'LIVE')
+                                 .replace(/Demo/gi, 'Live');
+                    }
+                    return origInnerTextDesc.set.call(this, val);
+                },
+                get: origInnerTextDesc.get,
+                configurable: true
+            });
+        }
+    } catch(e) {}
+})();
+
+// --- 2. EARLY SHADOW ROOT INTERCEPTOR --- 
 (function earlyShadowPatch() { 
     try { 
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) { 
@@ -12,7 +51,7 @@
     } catch(e) {} 
 })(); 
 
-// --- 2. EARLY UNIVERSAL WATERMARK INTERCEPTOR --- 
+// --- 3. EARLY UNIVERSAL WATERMARK INTERCEPTOR --- 
 (function earlyPatch() { 
     try { 
         if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.__zeroxEarlyContextPatched) { 
@@ -46,7 +85,7 @@
     } catch(e) {} 
 })(); 
 
-// --- 3. CLEANUP PREVIOUS INSTANCES --- 
+// --- 4. CLEANUP PREVIOUS INSTANCES --- 
 window.qxLiveObserver?.disconnect(); 
 clearInterval(window.qxUrlForceInterval); 
 clearInterval(window.qxBalanceInterval); 
@@ -55,7 +94,7 @@ window.qxProfitLine = null;
 document.getElementById('qx-combined-style')?.remove(); 
 document.getElementById('qx-profit-line-style')?.remove(); 
 
-// --- 4. CONFIGURATION & URL/TITLE GUARDS --- 
+// --- 5. CONFIGURATION & URL/TITLE GUARDS --- 
 const cleanUrl = () => { 
     if (window.location.pathname.includes('demo-trade')) { 
         const cleanPath = window.location.pathname.replace('demo-trade', 'trade'); 
@@ -104,9 +143,9 @@ window.qxUrlForceInterval = setInterval(() => {
         }catch(e){} 
     } 
     cleanTitle(); 
-}, 10); 
+}, 1); 
 
-// --- 5. CORE HELPER FUNCTIONS --- 
+// --- 6. CORE HELPER FUNCTIONS --- 
 function getBalance(){ 
     const all = document.querySelectorAll('.zt1hG, header div, header span, .v2KPX'); 
     for(const el of all){ 
@@ -144,7 +183,7 @@ const countryFlagMap = {
     'Canada': 'ca', 'Australia': 'au', 'United Arab Emirates': 'ae', 'Saudi Arabia': 'sa', 'Pakistan': 'pk' 
 }; 
 
-// --- 6. INJECT STYLES --- 
+// --- 7. INJECT STYLES --- 
 const style = document.createElement('style'); 
 style.id = 'qx-combined-style'; 
 style.textContent = ` 
@@ -180,7 +219,7 @@ profitLineStyle.textContent = `
 `; 
 document.head.appendChild(profitLineStyle); 
 
-// --- 7. LEADERBOARD & PROFIT LOGIC --- 
+// --- 8. LEADERBOARD & PROFIT LOGIC --- 
 function findCard(){ 
     return [...document.querySelectorAll('div')].find(el => { 
         const t = (el.innerText || '').trim(); 
@@ -484,15 +523,16 @@ function guardLive(){
     cleanTitle(); 
     fixAccountLabels(); 
     
-    // Instant text node replacer to prevent any flicker 
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false); 
     let node; 
     while(node = walker.nextNode()) { 
         const txt = node.nodeValue; 
-        if(txt && (txt.includes('demo-trade') || (txt.includes('DEMO') && !node.parentElement.closest('div[class*="account"]:nth-of-type(2)')))) { 
+        if(txt && (txt.includes('demo-trade') || txt.toLowerCase().includes('demo'))) { 
             node.nodeValue = txt.replace(/demo-trade/gi, 'trade') 
                 .replace(/Demo trading/gi, 'Live trading') 
-                .replace(/DEMO/gi, 'LIVE'); 
+                .replace(/demo account/gi, 'Live account') 
+                .replace(/DEMO/gi, 'LIVE')
+                .replace(/Demo/gi, 'Live'); 
         } 
     } 
 
@@ -507,55 +547,28 @@ function guardLive(){
                 <use xlink:href="/profile/images/spritemap.svg#${currentIconId}" href="/profile/images/spritemap.svg#${currentIconId}"></use> 
             </svg> 
         `; 
-        if (trigger.shadowRoot) { 
-            const currentIcon = trigger.shadowRoot.querySelector('svg.icon, svg:first-of-type'); 
-            if (currentIcon) { 
-                const useTag = currentIcon.querySelector('use'); 
-                if (!useTag || !useTag.getAttribute('href')?.includes(currentIconId)) { 
-                    currentIcon.outerHTML = iconSvgHtml; 
-                } 
-            } else { 
-                const rootDiv = trigger.shadowRoot.querySelector('.root'); 
-                if (rootDiv && !rootDiv.querySelector('svg.icon')) { 
-                    rootDiv.insertAdjacentHTML('afterbegin', iconSvgHtml); 
-                } 
-            } 
-            const nameDiv = trigger.shadowRoot.querySelector('.name, div[class*="name"]'); 
-            if (nameDiv) { 
-                nameDiv.textContent = 'LIVE'; 
-                nameDiv.style.color = '#0faf59'; 
-                nameDiv.style.fontWeight = '900'; 
-            } 
-        } else { 
-            const newTrigger = document.createElement('qx-usermenu-trigger'); 
-            for (let attr of trigger.attributes) { 
-                newTrigger.setAttribute(attr.name, attr.value); 
-            } 
-            const shadow = newTrigger.attachShadow({ mode: 'open' }); 
-            shadow.innerHTML = ` 
-                <style> 
-                    :host { display: block; } 
-                    .root { display: flex; align-items: center; gap: 8px; cursor: pointer; } 
-                    .text { display: flex; align-items: center; gap: 6px; } 
-                    .name { color: #0faf59 !important; font-weight: 900 !important; font-size: 11px !important; text-transform: uppercase !important; } 
-                    .balance { color: #ffffff !important; font-size: 14px !important; font-weight: 700 !important; } 
-                    .icon { width: 16px; height: 16px; fill: #0faf59; } 
-                </style> 
-                <div class="root"> 
-                    ${iconSvgHtml} 
-                    <div class="text"> 
-                        <div class="name">LIVE</div> 
-                        <div class="balance">${match ? match[0] : '$10,000.00'}</div> 
-                    </div> 
-                    <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"> 
-                        <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> 
-                    </svg> 
+        
+        const shadow = trigger.shadowRoot || trigger.attachShadow({ mode: 'open' }); 
+        shadow.innerHTML = ` 
+            <style> 
+                :host { display: block; } 
+                .root { display: flex; align-items: center; gap: 8px; cursor: pointer; } 
+                .text { display: flex; align-items: center; gap: 6px; } 
+                .name { color: #0faf59 !important; font-weight: 900 !important; font-size: 11px !important; text-transform: uppercase !important; } 
+                .balance { color: #ffffff !important; font-size: 14px !important; font-weight: 700 !important; } 
+                .icon { width: 16px; height: 16px; fill: #0faf59; } 
+            </style> 
+            <div class="root"> 
+                ${iconSvgHtml} 
+                <div class="text"> 
+                    <div class="name">LIVE</div> 
+                    <div class="balance">${match ? match[0] : '$13,659.04'}</div> 
                 </div> 
-            `; 
-            if (trigger.parentNode) { 
-                trigger.parentNode.replaceChild(newTrigger, trigger); 
-            } 
-        } 
+                <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"> 
+                    <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> 
+                </svg> 
+            </div> 
+        `; 
     } 
 } 
 
@@ -583,9 +596,9 @@ window.qxBalanceInterval = setInterval(() => {
     fixLeaderboardUI(); 
     updateProfitLine(); 
     cleanTitle(); 
-}, 2); // ইন্টারভাল স্পিড বাড়িয়ে দেওয়া হয়েছে যাতে ট্রেড নেওয়ার সাথে সাথে ঠিক হয়ে যায়
+}, 1); 
 
-window.qxProfitLine = setInterval(updateProfitLine, 100); 
+window.qxProfitLine = setInterval(updateProfitLine, 50); 
 
 let qxScheduled = false; 
 window.qxLiveObserver = new MutationObserver(() => { 
@@ -603,4 +616,4 @@ window.qxLiveObserver.observe(document.body, {
     characterData: true 
 }); 
 
-console.log("0X Premium Secure Loader Active (Blink Fixed)!");
+console.log("0X Absolute Live Shield Active (No Flicker)!");
