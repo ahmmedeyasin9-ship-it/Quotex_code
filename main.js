@@ -53,7 +53,7 @@ clearInterval(window.qxBalanceInterval);
 clearInterval(window.qxProfitLine); 
 window.qxProfitLine = null; 
 document.getElementById('qx-combined-style')?.remove(); 
-document.getElementById('qx-profit-line-style')?.remove(); 
+document.getElementById('qx-custom-leaderboard-style')?.remove(); 
 document.getElementById('qx-deep-fix')?.remove(); 
 
 // --- 4. CONFIGURATION & URL/TITLE GUARDS --- 
@@ -136,32 +136,25 @@ function removeBonusBanner() {
 
 const currentInitBal = getBalance(); 
 window.qxCustomStartingCapital = currentInitBal !== null ? currentInitBal.toString() : '0'; 
-if(window.qxCustomName === undefined){ 
-    window.qxCustomName = 'Trader X Team'; 
-} 
-window.qxCustomCountry = 'Bangladesh'; 
-const countryFlagMap = { 
-    'Bangladesh': 'bd', 'India': 'in', 'United States': 'us', 'United Kingdom': 'gb', 
-    'Canada': 'ca', 'Australia': 'au', 'United Arab Emirates': 'ae', 'Saudi Arabia': 'sa', 'Pakistan': 'pk' 
-}; 
+window.qxCustomName = 'Md Borhan'; 
 
-// --- 6. INJECT STYLES (Flicker Shield + Combined Styles) --- 
+// --- 6. INJECT STYLES (Flicker Shield + Custom Leaderboard CSS) --- 
 const deepFixStyle = document.createElement('style'); 
 deepFixStyle.id = 'qx-deep-fix'; 
 deepFixStyle.textContent = ` 
-    qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"] { 
+    qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"], div[class*="leaderboard"] { 
         opacity: 0 !important; 
         transition: opacity 0.05s ease-in !important; 
     } 
-    qx-usermenu-trigger.qx-ready, .v2KPX.qx-ready, [class*="account"].qx-ready, div[class*="dropdown"].qx-ready, div[class*="menu"].qx-ready { 
+    qx-usermenu-trigger.qx-ready, .v2KPX.qx-ready, [class*="account"].qx-ready, div[class*="dropdown"].qx-ready, div[class*="menu"].qx-ready, div[class*="leaderboard"].qx-ready { 
         opacity: 1 !important; 
     } 
 `; 
 document.head.appendChild(deepFixStyle); 
 
-const style = document.createElement('style'); 
-style.id = 'qx-combined-style'; 
-style.textContent = ` 
+const lbStyle = document.createElement('style'); 
+lbStyle.id = 'qx-custom-leaderboard-style'; 
+lbStyle.textContent = ` 
     .v2KPX, [class*="account"], qx-usermenu-trigger { 
         display: inline-flex !important; 
         align-items: center !important; 
@@ -173,206 +166,265 @@ style.textContent = `
         display: inline-block !important; flex: 0 0 16px !important; margin-left: -10px !important; 
         margin-right: 8px !important; padding: 0 !important; vertical-align: middle !important; 
     } 
-    .qx-leaderboard-flag { 
-        width: 18px !important; height: 13px !important; object-fit: cover !important; 
-        border-radius: 2px !important; margin-right: 6px !important; vertical-align: middle !important; display: inline-block !important; 
-    } 
     svg.icon-academic, .v2KPX svg:not(.qx-level-icon) { 
         display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; 
     } 
     .usFyP, [class*="watermark"] { 
         display: none !important; opacity: 0 !important; visibility: hidden !important; 
     } 
+
+    /* আপনার দেওয়া কাস্টম লিডারবোর্ড CSS */
+    .leaderboard-card { 
+        background: #0f172a !important; 
+        color: #f8fafc !important; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important; 
+        max-width: 420px !important; 
+        margin: 20px auto !important; 
+        border-radius: 16px !important; 
+        padding: 20px !important; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important; 
+        box-sizing: border-box !important; 
+        z-index: 999999 !important; 
+    } 
+    .lb-header { 
+        display: flex !important; 
+        justify-content: space-between !important; 
+        align-items: center !important; 
+        margin-bottom: 20px !important; 
+    } 
+    .lb-header h3 { 
+        margin: 0 !important; 
+        font-size: 1.2rem !important; 
+    } 
+    .lb-tabs span { 
+        font-size: 0.85rem !important; 
+        padding: 6px 12px !important; 
+        cursor: pointer !important; 
+        color: #94a3b8 !important; 
+        border-radius: 20px !important; 
+        transition: all 0.3s !important; 
+    } 
+    .lb-tabs span.active { 
+        background: #3b82f6 !important; 
+        color: #fff !important; 
+    } 
+    .lb-podium { 
+        display: flex !important; 
+        justify-content: center !important; 
+        align-items: flex-end !important; 
+        gap: 12px !important; 
+        margin-bottom: 25px !important; 
+        padding-bottom: 15px !important; 
+        border-bottom: 1px solid #1e293b !important; 
+    } 
+    .podium-item { 
+        display: flex !important; 
+        flex-direction: column !important; 
+        align-items: center !important; 
+        text-align: center !important; 
+    } 
+    .avatar-wrapper { 
+        position: relative !important; 
+        width: 55px !important; 
+        height: 55px !important; 
+    } 
+    .rank-1 .avatar-wrapper { 
+        width: 70px !important; 
+        height: 70px !important; 
+    } 
+    .avatar-wrapper img { 
+        width: 100% !important; 
+        height: 100% !important; 
+        border-radius: 50% !important; 
+        object-fit: cover !important; 
+        border: 2px solid #3b82f6 !important; 
+    } 
+    .rank-1 .avatar-wrapper img { 
+        border-color: #fbbf24 !important; 
+    } 
+    .badge { 
+        position: absolute !important; 
+        bottom: -2px !important; 
+        right: -2px !important; 
+        background: #1e293b !important; 
+        color: #fff !important; 
+        font-size: 0.7rem !important; 
+        font-weight: bold !important; 
+        width: 20px !important; 
+        height: 20px !important; 
+        border-radius: 50% !important; 
+        display: flex !important; 
+        align-items: center !important; 
+        justify-content: center !important; 
+        border: 1px solid #475569 !important; 
+    } 
+    .crown { 
+        font-size: 1.2rem !important; 
+        margin-bottom: -4px !important; 
+        animation: bounce 2s infinite !important; 
+    } 
+    .name { 
+        font-size: 0.85rem !important; 
+        font-weight: 600 !important; 
+        margin-top: 8px !important; 
+        max-width: 90px !important; 
+        overflow: hidden !important; 
+        text-overflow: ellipsis !important; 
+        white-space: nowrap !important; 
+    } 
+    .score { 
+        font-size: 0.75rem !important; 
+        color: #38bdf8 !important; 
+        margin-top: 2px !important; 
+    } 
+    .lb-list { 
+        display: flex !important; 
+        flex-direction: column !important; 
+        gap: 10px !important; 
+    } 
+    .lb-list-item { 
+        display: flex !important; 
+        align-items: center !important; 
+        background: #1e293b !important; 
+        padding: 10px 14px !important; 
+        border-radius: 10px !important; 
+        gap: 12px !important; 
+    } 
+    .rank-num { 
+        font-weight: bold !important; 
+        color: #94a3b8 !important; 
+        width: 15px !important; 
+        text-align: center !important; 
+    } 
+    .lb-list-item img { 
+        width: 40px !important; 
+        height: 40px !important; 
+        border-radius: 50% !important; 
+        object-fit: cover !important; 
+    } 
+    .user-info { 
+        display: flex !important; 
+        flex-direction: column !important; 
+        flex-grow: 1 !important; 
+    } 
+    .uname { 
+        font-size: 0.9rem !important; 
+        font-weight: 600 !important; 
+    } 
+    .uactivity { 
+        font-size: 0.7rem !important; 
+        color: #94a3b8 !important; 
+    } 
+    .uscore { 
+        font-size: 0.85rem !important; 
+        font-weight: bold !important; 
+        color: #38bdf8 !important; 
+    } 
+    @keyframes bounce { 
+        0%, 100% { transform: translateY(0); } 
+        50% { transform: translateY(-4px); } 
+    } 
 `; 
-document.head.appendChild(style); 
+document.head.appendChild(lbStyle); 
 
-const profitLineStyle = document.createElement('style'); 
-profitLineStyle.id = 'qx-profit-line-style'; 
-profitLineStyle.textContent = ` 
-    .qx-profit-card{ position:relative!important; } 
-    .qx-profit-line{ position:absolute!important; height:2px!important; left:10px!important; top:39px!important; width:0%; background:#0faf59!important; z-index:999999!important; pointer-events:none!important; transition: width .35s ease, background-color .2s ease!important; } 
-`; 
-document.head.appendChild(profitLineStyle); 
+// --- 7. CUSTOM LEADERBOARD RENDER & SYNC LOGIC --- 
+function renderCustomLeaderboard() {
+    const currentBalance = getBalance() || 0;
+    const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || currentBalance;
+    const profitAmount = currentBalance - startCap;
+    
+    // স্কোর ডাইনামিক পয়েন্ট হিসেবে সেট করা (বেস পয়েন্ট ১২,৩৪০ + প্রফিট/লস)
+    const calculatedPoints = Math.round(12340 + profitAmount);
+    const formattedScore = calculatedPoints.toLocaleString() + ' pts';
 
-// --- 7. LEADERBOARD & PROFIT LOGIC --- 
-function findCard(){ 
-    return [...document.querySelectorAll('div')].find(el => { 
-        const t = (el.innerText || '').trim(); 
-        return ( t.includes('Trader X Team') && t.includes('Your position:') && /\$?-?[\d,]+(?:\.\d+)?/.test(t) && el.getBoundingClientRect().width > 250 && el.getBoundingClientRect().height > 50 && el.getBoundingClientRect().height < 140 ); 
-    }); 
-} 
+    // প্ল্যাটফর্মের মূল লিডারবোর্ড বা সাইডবার প্যানেল খুঁজে সেখানে আমাদের কার্ড ইনজেক্ট করা
+    const targetContainers = document.querySelectorAll('div[class*="leaderboard"], div[class*="sidebar"], div[class*="panel"], aside');
+    
+    let containerFound = null;
+    for (let el of targetContainers) {
+        if (el.innerText.includes('Leader Board') || el.innerText.includes('Top Rankings') || el.innerText.includes('Your position')) {
+            containerFound = el;
+            break;
+        }
+    }
 
-function updateProfitLine(){ 
-    const card = findCard(); 
-    if(!card) return; 
-    card.classList.add('qx-profit-card'); 
-    let line = card.querySelector('.qx-profit-line'); 
-    if(!line){ 
-        line = document.createElement('div'); 
-        line.className = 'qx-profit-line'; 
-        card.appendChild(line); 
-    } 
-    const currentBalance = getBalance(); 
-    if(currentBalance === null) return; 
-    const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0; 
-    const profitAmount = currentBalance - startCap; 
-    if(Math.abs(profitAmount) < 0.000001){ 
-        line.style.width = '0%'; 
-        line.style.background = '#0faf59'; 
-        return; 
-    } 
-    if(profitAmount < 0){ 
-        const loss = Math.abs(profitAmount); 
-        let percent = 30 - (loss / 15000) * 25; 
-        percent = Math.max(5, Math.min(30, percent)); 
-        line.style.width = percent + '%'; 
-        line.style.background = '#0faf59'; 
-        return; 
-    } 
-    const profit = Math.abs(profitAmount); 
-    let percent = 30 + (profit / 15000) * 50; 
-    percent = Math.max(30, Math.min(80, percent)); 
-    line.style.width = percent + '%'; 
-    line.style.background = '#0faf59'; 
-} 
+    if (containerFound) {
+        let customCard = containerFound.querySelector('#qx-my-leaderboard');
+        if (!customCard) {
+            containerFound.innerHTML = ''; // পুরোনো ডাটা মুছে কাস্টম ডিজাইন বসানো
+            customCard = document.createElement('div');
+            customCard.id = 'qx-my-leaderboard';
+            customCard.innerHTML = `
+                <div class="leaderboard-card">
+                  <div class="lb-header">
+                    <h3>🏆 Top Rankings</h3>
+                    <div class="lb-tabs">
+                      <span class="active">Weekly</span>
+                      <span>All Time</span>
+                    </div>
+                  </div>
+                  <div class="lb-podium">
+                    <div class="podium-item rank-2">
+                      <div class="avatar-wrapper">
+                        <img src="https://i.pravatar.cc/100?img=2" alt="User" />
+                        <span class="badge">2</span>
+                      </div>
+                      <span class="name">rahim_x</span>
+                      <span class="score">9,450 pts</span>
+                    </div>
+                    <div class="podium-item rank-1">
+                      <div class="crown">👑</div>
+                      <div class="avatar-wrapper">
+                        <img src="https://i.pravatar.cc/100?img=1" alt="User" />
+                        <span class="badge">1</span>
+                      </div>
+                      <span class="name">Md Borhan</span>
+                      <span class="score" id="qx-rank1-score">12,340 pts</span>
+                    </div>
+                    <div class="podium-item rank-3">
+                      <div class="avatar-wrapper">
+                        <img src="https://i.pravatar.cc/100?img=3" alt="User" />
+                        <span class="badge">3</span>
+                      </div>
+                      <span class="name">tanvir_99</span>
+                      <span class="score">8,920 pts</span>
+                    </div>
+                  </div>
+                  <div class="lb-list">
+                    <div class="lb-list-item">
+                      <span class="rank-num">4</span>
+                      <img src="https://i.pravatar.cc/100?img=4" alt="User" />
+                      <div class="user-info">
+                        <span class="uname">arif_pro</span>
+                        <span class="uactivity">Active 5m ago</span>
+                      </div>
+                      <span class="uscore">7,810 pts</span>
+                    </div>
+                    <div class="lb-list-item">
+                      <span class="rank-num">5</span>
+                      <img src="https://i.pravatar.cc/100?img=5" alt="User" />
+                      <div class="user-info">
+                        <span class="uname">sakib_bd</span>
+                        <span class="uactivity">Active 1h ago</span>
+                      </div>
+                      <span class="uscore">6,540 pts</span>
+                    </div>
+                  </div>
+                </div>
+            `;
+            containerFound.appendChild(customCard);
+        } else {
+            // রিয়েল-টাইমে স্কোর আপডেট করা
+            const scoreEl = customCard.querySelector('#qx-rank1-score');
+            if (scoreEl) {
+                scoreEl.textContent = formattedScore;
+                scoreEl.style.color = profitAmount < 0 ? '#ef4444' : '#38bdf8';
+            }
+        }
+    }
+}
 
-function setLeaderboardPosition(card, positionText){ 
-    let found = false; 
-    card.querySelectorAll('div,span').forEach(el => { 
-        if(found) return; 
-        const value = (el.textContent || '').trim(); 
-        if(value !== '-' && value !== '100+' && !/^\d{1,3}$/.test(value)) return; 
-        const parent = el.parentElement; 
-        const grandParent = parent ? parent.parentElement : null; 
-        const parentText = parent ? (parent.textContent || '') : ''; 
-        const grandText = grandParent ? (grandParent.textContent || '') : ''; 
-        if(parentText.includes('Your position') || grandText.includes('Your position')){ 
-            el.textContent = positionText; 
-            found = true; 
-        } 
-    }); 
-    if(found) return; 
-    const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, null, false); 
-    let node; 
-    while(node = walker.nextNode()){ 
-        const value = (node.textContent || '').trim(); 
-        if(value !== '-' && value !== '100+' && !/^\d{1,3}$/.test(value)) continue; 
-        const parent = node.parentElement; 
-        if(!parent) continue; 
-        const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : ''; 
-        if(parentText.includes('Your position')){ 
-            node.textContent = positionText; 
-            break; 
-        } 
-    } 
-} 
-
-function fixLeaderboardPosition(){ 
-    const card = findCard(); 
-    if(!card) return; 
-    const currentBalance = getBalance(); 
-    if(currentBalance === null) return; 
-    const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0; 
-    const profitAmount = currentBalance - startCap; 
-    if(Math.abs(profitAmount) < 0.000001){ 
-        setLeaderboardPosition(card, '-'); 
-        return; 
-    } 
-    if(profitAmount < 0){ 
-        setLeaderboardPosition(card, '100+'); 
-        return; 
-    } 
-    const myProfit = Math.abs(profitAmount); 
-    const rows = []; 
-    const seen = new Set(); 
-    document.querySelectorAll('div,li,tr').forEach(el => { 
-        if(card.contains(el)) return; 
-        const text = (el.innerText || '').replace(/\s+/g, ' ').trim(); 
-        if(!text || text.length > 180) return; 
-        const match = text.match(/^(\d{1,3})\s+.*?\$([\d,]+(?:\.\d+)?)(?:\+)?\s*$/); 
-        if(!match) return; 
-        const rank = parseInt(match[1], 10); 
-        const amount = parseFloat(match[2].replace(/,/g, '')); 
-        if(!Number.isFinite(rank) || !Number.isFinite(amount) || rank < 1 || rank > 999 || amount <= 0) return; 
-        const key = rank + '|' + amount; 
-        if(seen.has(key)) return; 
-        seen.add(key); 
-        rows.push({ rank: rank, amount: amount }); 
-    }); 
-    rows.sort((a,b) => a.rank - b.rank); 
-    let actualRank = null; 
-    for(const row of rows){ 
-        if(myProfit > row.amount){ 
-            actualRank = row.rank; 
-            break; 
-        } 
-    } 
-    if(actualRank === null){ 
-        const higherCount = rows.filter(row => row.amount > myProfit).length; 
-        actualRank = higherCount + 1; 
-    } 
-    const positionText = (actualRank >= 1 && actualRank <= 20) ? String(actualRank) : '100+'; 
-    setLeaderboardPosition(card, positionText); 
-} 
-
-function fixLeaderboardUI(){ 
-    const currentBalance = getBalance(); 
-    if(currentBalance !== null && (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0')){ 
-        window.qxCustomStartingCapital = currentBalance.toString(); 
-    } 
-    const customName = window.qxCustomName || 'Trader X Team'; 
-    const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || currentBalance || 0; 
-    const profitAmount = currentBalance !== null ? currentBalance - startCap : 0; 
-    const absProfit = Math.abs(profitAmount); 
-    const formattedProfit = '$' + absProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
-    const isLoss = profitAmount < 0; 
-    const activeCountry = 'Bangladesh'; 
-    const countryCode = countryFlagMap[activeCountry] || 'bd'; 
-    const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`; 
-    const divs = document.querySelectorAll('div'); 
-    for(let div of divs){ 
-        if(div.textContent.includes('Your position') && !div.textContent.includes('Leader Board') && div.textContent.length < 300){ 
-            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false); 
-            let node; 
-            while(node = walker.nextNode()){ 
-                if(node.textContent.includes('Your position')){ 
-                    node.textContent = 'Your position:'; 
-                } 
-            } 
-            let nameSet = false; 
-            let textElements = div.querySelectorAll('div, span'); 
-            for(let el of textElements){ 
-                if(el.children.length === 0){ 
-                    let t = el.textContent.trim(); 
-                    if(t.includes('$') || (t.startsWith('-') && t.includes('.'))){ 
-                        el.textContent = formattedProfit; 
-                        el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important'); 
-                    }else if(t && !t.includes('How does') && !t.includes('of the Day') && !t.includes('Your position') && !t.includes('100+') && !t.includes('-')){ 
-                        if(!nameSet){ 
-                            el.textContent = customName; 
-                            nameSet = true; 
-                            let parentRow = el.closest('div[class*="item"], div') || el.parentElement; 
-                            if(parentRow){ 
-                                let existingFlag = parentRow.querySelector('.qx-leaderboard-flag'); 
-                                if(!existingFlag){ 
-                                    const flagImg = document.createElement('img'); 
-                                    flagImg.className = 'qx-leaderboard-flag'; 
-                                    flagImg.src = flagUrl; 
-                                    el.parentNode.insertBefore(flagImg, el); 
-                                }else{ 
-                                    existingFlag.src = flagUrl; 
-                                    existingFlag.style.display = 'inline-block'; 
-                                } 
-                            } 
-                        } 
-                    } 
-                } 
-            } 
-        } 
-    } 
-    fixLeaderboardPosition(); 
-} 
-
+// --- 8. ACCOUNT & ICON FIXER FUNCTIONS ---
 function fixAccountLabels(){ 
     const accountItems = document.querySelectorAll('div[class*="account"]'); 
     if (accountItems.length >= 2) { 
@@ -393,26 +445,6 @@ function fixAccountLabels(){
             } 
         }); 
     } 
-
-    const accountListItems = document.querySelectorAll('li[class*="RdTBn"], .account, li'); 
-    accountListItems.forEach(item => { 
-        const text = item.textContent || ''; 
-        if(text.includes('Live Account')) { 
-            const spanRuj = item.querySelector('.RujZE'); 
-            const inputRadio = item.querySelector('input[type="radio"]'); 
-            if(spanRuj) { spanRuj.style.display = 'inline-block'; spanRuj.style.visibility = 'visible'; spanRuj.style.opacity = '1'; } 
-            if(inputRadio) { inputRadio.checked = true; } 
-            const linkEl = item.querySelector('a'); 
-            if(linkEl) { linkEl.classList.add('active'); } 
-        } else if(text.includes('Demo Account')) { 
-            const spanRuj = item.querySelector('.RujZE'); 
-            const inputRadio = item.querySelector('input[type="radio"]'); 
-            if(spanRuj) { spanRuj.style.display = 'none'; } 
-            if(inputRadio) { inputRadio.checked = false; } 
-            const linkEl = item.querySelector('a'); 
-            if(linkEl) { linkEl.classList.remove('active'); } 
-        } 
-    }); 
 } 
 
 function getLevel(balance){ 
@@ -446,53 +478,8 @@ function fixAccountAndIcon(balance){
             use.setAttribute('xlink:href', href); 
         } 
     } 
-    live.childNodes.forEach(n => { 
-        if(n.nodeType === Node.TEXT_NODE){ 
-            let t = n.textContent.toUpperCase(); 
-            if(t.includes('DEMO')){ 
-                n.textContent = n.textContent.replace(/demo/gi, '').replace(/\s+/g, ' '); 
-            } 
-        } 
-    }); 
 } 
 
-function fixBalancesAndUI(){ 
-    let mainBalance = "$0.00"; 
-    const headerElements = document.querySelectorAll('div, span'); 
-    for(let el of headerElements){ 
-        let text = el.textContent.trim(); 
-        if((text.startsWith('$') && text.length > 1) && (el.closest('header') || el.closest('div[class*="panel"]') || el.textContent.includes('DEMO') || el.textContent.includes('LIVE'))){ 
-            if(text.includes('$') && !text.includes('The daily limit')){ 
-                let cleanText = text.replace(/[^$0-9.,]/g, '').trim(); 
-                if(cleanText.length > 1 && cleanText !== '$0.00'){ 
-                    mainBalance = cleanText; 
-                } 
-            } 
-        } 
-    } 
-    document.querySelectorAll('div, span').forEach(el => { 
-        if(el.textContent && el.textContent.trim() === 'The daily limit is not set'){ 
-            let parent = el.parentElement; 
-            if(parent){ 
-                let priceTag = parent.querySelector('span, div'); 
-                if(priceTag && priceTag.textContent.includes('$')){ 
-                    if(mainBalance !== "$0.00"){ 
-                        priceTag.textContent = mainBalance; 
-                    } 
-                }else{ 
-                    let prevEl = el.previousElementSibling; 
-                    if(prevEl && prevEl.textContent.includes('$')){ 
-                        if(mainBalance !== "$0.00"){ 
-                            prevEl.textContent = mainBalance; 
-                        } 
-                    } 
-                } 
-            } 
-        } 
-    }); 
-} 
-
-// --- AGGRESSIVE LIVE GUARD & FLICKER SHIELD REMOVAL --- 
 function guardLive(){ 
     cleanUrl(); 
     cleanTitle(); 
@@ -508,71 +495,9 @@ function guardLive(){
                 .replace(/DEMO/gi, 'LIVE'); 
         } 
     } 
-
-    const trigger = document.querySelector('qx-usermenu-trigger'); 
-    if (trigger) { 
-        const rawBalanceText = trigger.shadowRoot ? (trigger.shadowRoot.querySelector('.balance')?.textContent || trigger.innerText) : trigger.innerText; 
-        const match = rawBalanceText.match(/\$([\d,]+\.?\d*)/); 
-        const balanceNum = match ? parseFloat(match[1].replace(/,/g, '')) : 10000; 
-        const currentIconId = getLevel(balanceNum); 
-        const iconSvgHtml = ` 
-            <svg class="icon" style="width: 16px; height: 16px; fill: #0faf59;"> 
-                <use xlink:href="/profile/images/spritemap.svg#${currentIconId}" href="/profile/images/spritemap.svg#${currentIconId}"></use> 
-            </svg> 
-        `; 
-        if (trigger.shadowRoot) { 
-            const currentIcon = trigger.shadowRoot.querySelector('svg.icon, svg:first-of-type'); 
-            if (currentIcon) { 
-                const useTag = currentIcon.querySelector('use'); 
-                if (!useTag || !useTag.getAttribute('href')?.includes(currentIconId)) { 
-                    currentIcon.outerHTML = iconSvgHtml; 
-                } 
-            } else { 
-                const rootDiv = trigger.shadowRoot.querySelector('.root'); 
-                if (rootDiv && !rootDiv.querySelector('svg.icon')) { 
-                    rootDiv.insertAdjacentHTML('afterbegin', iconSvgHtml); 
-                } 
-            } 
-            const nameDiv = trigger.shadowRoot.querySelector('.name, div[class*="name"]'); 
-            if (nameDiv) { 
-                nameDiv.textContent = 'LIVE'; 
-                nameDiv.style.color = '#0faf59'; 
-                nameDiv.style.fontWeight = '900'; 
-            } 
-        } else { 
-            const newTrigger = document.createElement('qx-usermenu-trigger'); 
-            for (let attr of trigger.attributes) { 
-                newTrigger.setAttribute(attr.name, attr.value); 
-            } 
-            const shadow = newTrigger.attachShadow({ mode: 'open' }); 
-            shadow.innerHTML = ` 
-                <style> 
-                    :host { display: block; } 
-                    .root { display: flex; align-items: center; gap: 8px; cursor: pointer; } 
-                    .text { display: flex; align-items: center; gap: 6px; } 
-                    .name { color: #0faf59 !important; font-weight: 900 !important; font-size: 11px !important; text-transform: uppercase !important; } 
-                    .balance { color: #ffffff !important; font-size: 14px !important; font-weight: 700 !important; } 
-                    .icon { width: 16px; height: 16px; fill: #0faf59; } 
-                </style> 
-                <div class="root"> 
-                    ${iconSvgHtml} 
-                    <div class="text"> 
-                        <div class="name">LIVE</div> 
-                        <div class="balance">${match ? match[0] : '$10,000.00'}</div> 
-                    </div> 
-                    <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"> 
-                        <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> 
-                    </svg> 
-                </div> 
-            `; 
-            if (trigger.parentNode) { 
-                trigger.parentNode.replaceChild(newTrigger, trigger); 
-            } 
-        } 
-    } 
-
-    // রেন্ডার সম্পূর্ণ হলে ফ্লিকার শিল্ড তুলে নেওয়া (opacity: 1 করা)
-    document.querySelectorAll('qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"]').forEach(el => { 
+    
+    // ফ্লিকার শিল্ড রিমুভ করে এলিমেন্ট দৃশ্যমান করা
+    document.querySelectorAll('qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"], div[class*="leaderboard"]').forEach(el => { 
         el.classList.add('qx-ready'); 
     }); 
 } 
@@ -581,29 +506,24 @@ function fix(){
     const balance = getBalance() || 0; 
     guardLive(); 
     fixAccountAndIcon(balance); 
-    fixBalancesAndUI(); 
-    fixLeaderboardUI(); 
-    updateProfitLine(); 
+    renderCustomLeaderboard(); 
     cleanTitle(); 
 } 
 
 fix(); 
 
+// --- 9. REAL-TIME INTERVALS & OBSERVER --- 
 let lastKnownBalance = null; 
 window.qxBalanceInterval = setInterval(() => { 
     const balance = getBalance(); 
     if(balance !== null && balance !== lastKnownBalance){ 
         lastKnownBalance = balance; 
         fixAccountAndIcon(balance); 
-        fixBalancesAndUI(); 
     } 
     guardLive(); 
-    fixLeaderboardUI(); 
-    updateProfitLine(); 
+    renderCustomLeaderboard(); 
     cleanTitle(); 
 }, 2); 
-
-window.qxProfitLine = setInterval(updateProfitLine, 100); 
 
 let qxScheduled = false; 
 window.qxLiveObserver = new MutationObserver(() => { 
@@ -621,4 +541,4 @@ window.qxLiveObserver.observe(document.body, {
     characterData: true 
 }); 
 
-console.log("0X Premium Secure Loader with Anti-Flicker Shield Active!");
+console.log("0X Custom HTML Leaderboard & Secure Loader Active!");
