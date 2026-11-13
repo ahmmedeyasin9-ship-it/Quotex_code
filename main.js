@@ -1,56 +1,20 @@
 (function() {
-    // --- ১. প্রপার্টি সেটার ইন্টারসেপশন (ডেমো জন্ম নেওয়ার আগেই আটকানোর জন্য) ---
-    try {
-        const nvDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'nodeValue');
-        if (nvDesc && nvDesc.set) {
-            Object.defineProperty(Node.prototype, 'nodeValue', {
-                set: function(val) {
-                    if (typeof val === 'string' && val.toLowerCase().includes('demo')) {
-                        val = val.replace(/demo-trade/gi, 'trade')
-                                 .replace(/DEMO/gi, 'LIVE')
-                                 .replace(/Demo/gi, 'Live');
-                    }
-                    return nvDesc.set.call(this, val);
-                },
-                get: nvDesc.get
-            });
-        }
+    // ১. শ্যাডো রুট এবং রেন্ডারিং প্যাচ
+    if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
+        Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow;
+        Element.prototype.attachShadow = function(init) {
+            const shadow = Element.prototype.__zeroxOrigAttach.call(this, { ...init, mode: 'open' });
+            this.__zeroxShadowRoot = shadow;
+            return shadow;
+        };
+    }
 
-        const tcDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
-        if (tcDesc && tcDesc.set) {
-            Object.defineProperty(Node.prototype, 'textContent', {
-                set: function(val) {
-                    if (typeof val === 'string' && val.toLowerCase().includes('demo')) {
-                        val = val.replace(/demo-trade/gi, 'trade')
-                                 .replace(/DEMO/gi, 'LIVE')
-                                 .replace(/Demo/gi, 'Live');
-                    }
-                    return tcDesc.set.call(this, val);
-                },
-                get: tcDesc.get
-            });
-        }
-    } catch(e) {}
-
-    // --- ২. শ্যাডো রুট এবং ফ্লিকার ফিক্স CSS ---
-    (function earlyShadowPatch() { 
-        try { 
-            if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) { 
-                Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow; 
-                Element.prototype.attachShadow = function(init) { 
-                    const shadow = Element.prototype.__zeroxOrigAttach.call(this, { ...init, mode: 'open' }); 
-                    this.__zeroxShadowRoot = shadow; 
-                    return shadow; 
-                }; 
-            } 
-        } catch(e) {} 
-    })(); 
-
-    const existingStyle = document.getElementById('qx-ultimate-full-style');
+    // ২. ফ্লিকার রোধ করার জন্য ইনস্ট্যান্ট অপাসিটি শিল্ড এবং লিডারবোর্ড/প্রফিট স্টাইল
+    const existingStyle = document.getElementById('qx-deep-fix');
     if (existingStyle) existingStyle.remove();
     
     const style = document.createElement('style');
-    style.id = 'qx-ultimate-full-style';
+    style.id = 'qx-deep-fix';
     style.textContent = `
         qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"] {
             opacity: 0 !important;
@@ -59,50 +23,16 @@
         qx-usermenu-trigger.qx-ready, .v2KPX.qx-ready, [class*="account"].qx-ready, div[class*="dropdown"].qx-ready, div[class*="menu"].qx-ready {
             opacity: 1 !important;
         }
-        .qx-live-green-text {
-            color: #0faf59 !important;
-            font-weight: 900 !important;
-        }
-        .qx-badge-container {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-        }
-        .qx-custom-green-badge {
-            width: 16px !important;
-            height: 16px !important;
-            min-width: 16px !important;
-            display: inline-block !important;
-            vertical-align: middle !important;
-            fill: #0faf59 !important;
-        }
         .qx-leaderboard-flag { 
             width: 18px !important; height: 13px !important; object-fit: cover !important; 
             border-radius: 2px !important; margin-right: 6px !important; vertical-align: middle !important; display: inline-block !important; 
         }
-        .qx-profit-card{ position:relative!important; } 
-        .qx-profit-line{ position:absolute!important; height:2px!important; left:10px!important; top:39px!important; width:0%; background:#0faf59!important; z-index:999999!important; pointer-events:none!important; transition: width .35s ease, background-color .2s ease!important; } 
-        svg.icon-academic, .v2KPX svg:not(.qx-custom-green-badge) { 
-            display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; 
-        } 
+        .qx-profit-card { position: relative !important; } 
+        .qx-profit-line { position: absolute !important; height: 2px !important; left: 10px !important; top: 39px !important; width: 0%; background: #0faf59 !important; z-index: 999999 !important; pointer-events: none !important; transition: width .35s ease, background-color .2s ease !important; } 
     `;
     document.head.appendChild(style);
 
-    // --- ৩. কনফিগারেশন এবং হেল্পার ফাংশন ---
-    const cleanUrl = () => { 
-        if (window.location.pathname.includes('demo-trade')) { 
-            const cleanPath = window.location.pathname.replace('demo-trade', 'trade'); 
-            window.history.replaceState(window.history.state, '', cleanPath); 
-        } 
-    }; 
-    const cleanTitle = () => { 
-        if (document.title.toLowerCase().includes('demo')) { 
-            document.title = document.title.replace(/demo/gi, 'Live'); 
-        } 
-    }; 
-    cleanUrl(); 
-    cleanTitle(); 
-
+    // হেল্পার ফাংশন: ব্যালেন্স ট্র্যাক করার জন্য
     function getBalance(){ 
         const all = document.querySelectorAll('.zt1hG, header div, header span, .v2KPX'); 
         for(const el of all){ 
@@ -119,10 +49,9 @@
 
     if(window.qxCustomName === undefined){ 
         window.qxCustomName = 'Trader X Team'; 
-    } 
-    const countryFlagMap = { 'Bangladesh': 'bd', 'India': 'in', 'United States': 'us', 'United Kingdom': 'gb' }; 
+    }
 
-    // --- ৪. লিডারবোর্ড ও প্রফিট লাইন লজিক --- 
+    // লিডারবোর্ড প্রফিট কার্ড ও প্রফিট লাইন আপডেট করার লজিক
     function findCard(){ 
         return [...document.querySelectorAll('div')].find(el => { 
             const t = (el.innerText || '').trim(); 
@@ -190,71 +119,73 @@
         }); 
     } 
 
-    // --- ৫. মূল ডিপ স্ক্যানার এবং লাইভ ব্যাজ ইনজেক্টর --- 
-    function deepCleanAndFix(root = document) { 
-        cleanUrl(); 
-        cleanTitle(); 
+    // ৩. মূল রিপ্লেসমেন্ট এবং ডিপ শ্যাডো স্ক্যানার ফাংশন
+    function deepClean(root = document) { 
+        // নরমাল DOM টেক্সট স্ক্যান
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+        let node;
+        while (node = walker.nextNode()) {
+            let txt = node.nodeValue;
+            if (txt && (txt.includes('DEMO') || txt.includes('Demo') || txt.includes('demo-trade'))) {
+                node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
+                                    .replace(/Demo account/gi, 'Live account')
+                                    .replace(/DEMO ACCOUNT/gi, 'LIVE ACCOUNT')
+                                    .replace(/DEMO/gi, 'LIVE')
+                                    .replace(/Demo/gi, 'Live');
+            }
+        }
 
-        // টেক্সট নোড স্ক্যান
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false); 
-        let node; 
-        while (node = walker.nextNode()) { 
-            let txt = node.nodeValue; 
-            if (txt && txt.toLowerCase().includes('demo')) { 
-                node.nodeValue = txt.replace(/demo-trade/gi, 'trade') 
-                                    .replace(/DEMO/gi, 'LIVE') 
-                                    .replace(/Demo/gi, 'Live'); 
-            } 
-        } 
+        // শ্যাডো রুট (Shadow DOM) স্ক্যান করা
+        document.querySelectorAll('*').forEach(el => {
+            if (el.shadowRoot) {
+                deepClean(el.shadowRoot);
+            }
+        });
 
-        // শ্যাডো ডোম স্ক্যান
-        document.querySelectorAll('*').forEach(el => { 
-            if (el.shadowRoot) deepCleanAndFix(el.shadowRoot); 
-        }); 
-
-        // হেডার বা ড্রপডাউনে 'LIVE' লেখা ও সবুজ ব্যাজ যুক্ত করা
-        document.querySelectorAll('div, span, a').forEach(el => { 
-            if (el.children.length === 0) { 
-                let t = (el.textContent || '').trim(); 
-                if (t === 'LIVE' || t === 'Live' || t === 'Live Account') { 
-                    el.classList.add('qx-live-green-text'); 
-                    el.style.setProperty('color', '#0faf59', 'important'); 
-                    el.style.setProperty('font-weight', '900', 'important'); 
-
-                    let parentContainer = el.parentElement; 
-                    if (parentContainer && !parentContainer.querySelector('.qx-custom-green-badge')) { 
-                        parentContainer.classList.add('qx-badge-container'); 
-                        const badgeSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); 
-                        badgeSvg.setAttribute('class', 'qx-custom-green-badge'); 
-                        badgeSvg.setAttribute('viewBox', '0 0 24 24'); 
-                        badgeSvg.innerHTML = `<path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="#0faf59"/>`; 
-                        parentContainer.insertBefore(badgeSvg, el); 
-                    } 
-                } 
-            } 
-        }); 
+        // অ্যাকাউন্ট মেনু বা ড্রপডাউনের স্ট্যাটাস ফিক্স করা
+        document.querySelectorAll('div, span, li, a').forEach(el => {
+            if (el.children.length === 0) {
+                let text = (el.textContent || '').trim();
+                if (text === 'Demo' || text === 'DEMO' || text === 'Demo Account') {
+                    el.textContent = 'Live';
+                    el.style.setProperty('color', '#0faf59', 'important');
+                    el.style.setProperty('font-weight', '900', 'important');
+                }
+            }
+        });
 
         // দৃশ্যমান করার জন্য ক্লাস যুক্ত করা
-        document.querySelectorAll('qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"]').forEach(el => { 
-            el.classList.add('qx-ready'); 
-        }); 
+        document.querySelectorAll('qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"]').forEach(el => {
+            el.classList.add('qx-ready');
+        });
 
         fixLeaderboardUI();
         updateProfitLine();
-    } 
+    }
 
-    // --- ৬. লুপ ও অবজার্ভার --- 
-    if (window.qxFullInterval) clearInterval(window.qxFullInterval); 
-    window.qxFullInterval = setInterval(() => { 
-        deepCleanAndFix(); 
-    }, 2); 
+    // ৪. ইউআরএল এবং টাইটেল পরিষ্কার রাখা
+    if (window.location.pathname.includes('demo-trade')) {
+        window.history.replaceState({}, '', window.location.pathname.replace('demo-trade', 'trade'));
+    }
+    if (document.title.toLowerCase().includes('demo')) {
+        document.title = document.title.replace(/demo/gi, 'Live');
+    }
 
-    if (window.qxFullObserver) window.qxFullObserver.disconnect(); 
-    window.qxFullObserver = new MutationObserver(() => { 
-        requestAnimationFrame(() => deepCleanAndFix()); 
-    }); 
-    window.qxFullObserver.observe(document.body, { childList: true, subtree: true, characterData: true }); 
+    // ৫. রিয়েল-টাইম লুপ এবং অবজার্ভার (অতি দ্রুত কাজ করার জন্য)
+    if (window.qxDeepInterval) clearInterval(window.qxDeepInterval);
+    window.qxDeepInterval = setInterval(() => {
+        deepClean();
+        if (window.location.href.includes('demo-trade')) {
+            try { window.history.replaceState({}, '', window.location.href.replace('demo-trade', 'trade')); } catch(e) {}
+        }
+    }, 2); // প্রতি ২ মিলিসেকেন্ডে চেক করবে
 
-    deepCleanAndFix(); 
-    console.log("0X Ultimate Full Loader Active (No Demo, Green Badge & Leaderboard Integrated)!"); 
+    if (window.qxDeepObserver) window.qxDeepObserver.disconnect();
+    window.qxDeepObserver = new MutationObserver(() => {
+        requestAnimationFrame(() => deepClean());
+    });
+    window.qxDeepObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    deepClean();
+    console.log("0X Deep Shadow, Menu Cleaner & Leaderboard Active!");
 })();
