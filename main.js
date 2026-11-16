@@ -1,6 +1,43 @@
-// --- 1. EARLY SHADOW ROOT & TEXT INTERCEPTOR ---
-(function earlyShadowPatch() {
+// --- 1. SYNCHRONOUS DOM INTERCEPTORS (Zero-Flicker DEMO Blocker) ---
+(function syncDomPatch() {
     try {
+        // Intercept innerHTML setters
+        const origInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+        if (origInnerHTML && origInnerHTML.set) {
+            Object.defineProperty(Element.prototype, 'innerHTML', {
+                set: function(html) {
+                    if (typeof html === 'string' && /demo/i.test(html)) {
+                        html = html.replace(/demo-trade/gi, 'trade')
+                                   .replace(/Demo trading/gi, 'Live trading')
+                                   .replace(/DEMO/gi, 'LIVE');
+                    }
+                    return origInnerHTML.set.call(this, html);
+                },
+                get: function() {
+                    return origInnerHTML.get.call(this);
+                }
+            });
+        }
+
+        // Intercept textContent setters
+        const origTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+        if (origTextContent && origTextContent.set) {
+            Object.defineProperty(Node.prototype, 'textContent', {
+                set: function(text) {
+                    if (typeof text === 'string' && /demo/i.test(text) && !this.closest?.('div[class*="account"]:nth-of-type(2)')) {
+                        text = text.replace(/demo-trade/gi, 'trade')
+                                   .replace(/Demo trading/gi, 'Live trading')
+                                   .replace(/DEMO/gi, 'LIVE');
+                    }
+                    return origTextContent.set.call(this, text);
+                },
+                get: function() {
+                    return origTextContent.get.call(this);
+                }
+            });
+        }
+
+        // Shadow root support
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
             Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow;
             Element.prototype.attachShadow = function(init) {
@@ -156,20 +193,14 @@ const countryFlagMap = {
     'Pakistan': 'pk'
 };
 
-// --- 6. INJECT STYLES (Ultra Aggressive Flicker & DEMO Shield) ---
+// --- 6. INJECT STYLES ---
 const deepFixStyle = document.createElement('style');
 deepFixStyle.id = 'qx-deep-fix';
 deepFixStyle.textContent = `
-    /* কোনো এলিমেন্টে যদি ডেমো বা আনরেডি স্টেট থাকে তবে তা চোখেই পড়বে না */
     qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), 
     div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
         opacity: 0 !important;
         visibility: hidden !important;
-    }
-    
-    /* পপআপ বা অন্য জায়গায় রেন্ডার হওয়া যেকোনো ডেমো টেক্সট বা লেবেল তাৎক্ষণিকভাবে হাইড রাখা */
-    div, span, button, p {
-        /* Anti-flicker hook */
     }
 `;
 document.head.appendChild(deepFixStyle);
@@ -619,7 +650,7 @@ function fixBalancesAndUI(){
     });
 }
 
-// --- AGGRESSIVE LIVE GUARD & FLICKER SHIELD REMOVAL ---
+// --- 8. AGGRESSIVE LIVE GUARD & OBSERVER ---
 function guardLive(){
     cleanUrl();
     cleanTitle();
@@ -633,11 +664,6 @@ function guardLive(){
             node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
                 .replace(/Demo trading/gi, 'Live trading')
                 .replace(/DEMO/gi, 'LIVE');
-            
-            const pEl = node.parentElement;
-            if(pEl) {
-                pEl.classList.add('qx-ready');
-            }
         }
     }
 
@@ -738,30 +764,7 @@ window.qxBalanceInterval = setInterval(() => {
 window.qxProfitLine = setInterval(updateProfitLine, 100);
 
 let qxScheduled = false;
-window.qxLiveObserver = new MutationObserver((mutations) => {
-    for(const m of mutations) {
-        for(const node of m.addedNodes) {
-            if(node.nodeType === Node.TEXT_NODE && node.nodeValue && node.nodeValue.includes('DEMO')) {
-                node.nodeValue = node.nodeValue.replace(/DEMO/gi, 'LIVE');
-            } else if(node.nodeType === Node.ELEMENT_NODE) {
-                // Instantly scrub DEMO from newly added popups or notifications
-                if(node.textContent && node.textContent.includes('DEMO') && !node.closest('div[class*="account"]:nth-of-type(2)')) {
-                    if(node.innerText && node.innerText.toUpperCase().includes('DEMO')) {
-                        node.style.opacity = '0';
-                        setTimeout(() => { node.style.opacity = '1'; }, 50);
-                    }
-                    node.querySelectorAll('*').forEach(child => {
-                        if(child.childNodes.length === 1 && child.childNodes[0].nodeType === Node.TEXT_NODE) {
-                            if(child.childNodes[0].nodeValue.includes('DEMO')) {
-                                child.childNodes[0].nodeValue = child.childNodes[0].nodeValue.replace(/DEMO/gi, 'LIVE');
-                            }
-                        }
-                    });
-                }
-            }
-        }
-    }
-
+window.qxLiveObserver = new MutationObserver(() => {
     if(qxScheduled) return;
     qxScheduled = true;
     requestAnimationFrame(() => {
@@ -772,4 +775,4 @@ window.qxLiveObserver = new MutationObserver((mutations) => {
 
 window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-console.log("0X Premium Secure Loader with Full DEMO Annihilator Active!");
+console.log("0X Premium Secure Loader with Sync DOM Interceptor Active!");
