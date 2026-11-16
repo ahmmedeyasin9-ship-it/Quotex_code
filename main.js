@@ -7,9 +7,12 @@
             Object.defineProperty(Element.prototype, 'innerHTML', {
                 set: function(html) {
                     if (typeof html === 'string' && /demo/i.test(html)) {
-                        html = html.replace(/demo-trade/gi, 'trade')
-                                   .replace(/Demo trading/gi, 'Live trading')
-                                   .replace(/DEMO/gi, 'LIVE');
+                        // Account dropdown অংশ হলে পরিবর্তন করবে না
+                        if (!this.closest?.('div[class*="account"], li, ul')) {
+                            html = html.replace(/demo-trade/gi, 'trade')
+                                       .replace(/Demo trading/gi, 'Live trading')
+                                       .replace(/DEMO/gi, 'LIVE');
+                        }
                     }
                     return origInnerHTML.set.call(this, html);
                 },
@@ -24,10 +27,13 @@
         if (origTextContent && origTextContent.set) {
             Object.defineProperty(Node.prototype, 'textContent', {
                 set: function(text) {
-                    if (typeof text === 'string' && /demo/i.test(text) && !this.closest?.('div[class*="account"]:nth-of-type(2)')) {
-                        text = text.replace(/demo-trade/gi, 'trade')
-                                   .replace(/Demo trading/gi, 'Live trading')
-                                   .replace(/DEMO/gi, 'LIVE');
+                    if (typeof text === 'string' && /demo/i.test(text)) {
+                        // Account dropdown বা list হলে ডেমো অপরিবর্তিত রাখবে
+                        if (!this.closest?.('div[class*="account"], li, ul')) {
+                            text = text.replace(/demo-trade/gi, 'trade')
+                                       .replace(/Demo trading/gi, 'Live trading')
+                                       .replace(/DEMO/gi, 'LIVE');
+                        }
                     }
                     return origTextContent.set.call(this, text);
                 },
@@ -288,9 +294,9 @@ function findCard(){
 }
 
 function getLevel(balance){
-    if(balance >= 10000) return 'icon-profile-level-vip';      // VIP Logo
-    if(balance >= 5000) return 'icon-profile-level-pro';       // Pro Logo
-    return 'icon-profile-level-standart';                      // Standard Logo
+    if(balance >= 10000) return 'icon-profile-level-vip';      // VIP Logo (+4% profit)
+    if(balance >= 5000) return 'icon-profile-level-pro';       // Pro Logo (+2% profit)
+    return 'icon-profile-level-standart';                      // Standard Logo (+0% profit)
 }
 
 function updateProfitLine(){
@@ -536,6 +542,7 @@ function fixLeaderboardUI(){
 function fixAccountLabels(){
     const accountItems = document.querySelectorAll('div[class*="account"]');
     if (accountItems.length >= 2) {
+        // প্রথমটি লাইভ অ্যাকাউন্ট
         accountItems[0].querySelectorAll('div, span').forEach(el => {
             if (el.children.length === 0) {
                 let t = el.textContent.trim();
@@ -544,10 +551,11 @@ function fixAccountLabels(){
                 }
             }
         });
+        // দ্বিতীয়টি ডেমো অ্যাকাউন্ট নিশ্চিত করা
         accountItems[1].querySelectorAll('div, span').forEach(el => {
             if (el.children.length === 0) {
                 let t = el.textContent.trim();
-                if (t.toLowerCase().includes('live') && !t.toLowerCase().includes('demo')) {
+                if (t.toLowerCase().includes('live')) {
                     el.textContent = t.replace(/live/gi, 'Demo');
                 }
             }
@@ -557,7 +565,7 @@ function fixAccountLabels(){
     const accountListItems = document.querySelectorAll('li[class*="RdTBn"], .account, li');
     accountListItems.forEach(item => {
         const text = item.textContent || '';
-        if(text.includes('Live Account')) {
+        if(text.includes('Live Account') && !text.includes('Demo')) {
             const spanRuj = item.querySelector('.RujZE');
             const inputRadio = item.querySelector('input[type="radio"]');
             if(spanRuj) {
@@ -670,8 +678,11 @@ function guardLive(){
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while(node = walker.nextNode()) {
+        // Account dropdown বা list-এর ভেতরের টেক্সট হলে বাদ দেবো যাতে ডেমো অক্ষত থাকে
+        if (node.parentElement.closest('div[class*="account"], li, ul')) continue;
+
         const txt = node.nodeValue;
-        if(txt && (txt.includes('demo-trade') || (txt.includes('DEMO') && !node.parentElement.closest('div[class*="account"]:nth-of-type(2)')))) {
+        if(txt && (txt.includes('demo-trade') || txt.includes('DEMO') || txt.includes('Demo'))) {
             node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
                 .replace(/Demo trading/gi, 'Live trading')
                 .replace(/DEMO/gi, 'LIVE');
