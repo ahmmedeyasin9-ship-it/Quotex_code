@@ -1,4 +1,4 @@
-// --- 1. EARLY SHADOW ROOT INTERCEPTOR ---
+// --- 1. EARLY SHADOW ROOT & TEXT INTERCEPTOR ---
 (function earlyShadowPatch() {
     try {
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
@@ -156,22 +156,14 @@ const countryFlagMap = {
     'Pakistan': 'pk'
 };
 
-// --- 6. INJECT STYLES (Flicker Shield + DEMO Zero Opacity) ---
+// --- 6. INJECT STYLES (Absolute Flicker Shield) ---
 const deepFixStyle = document.createElement('style');
 deepFixStyle.id = 'qx-deep-fix';
 deepFixStyle.textContent = `
-    qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"], 
-    div, span {
-        /* Anti-flicker: hide elements containing DEMO or unready state until patched */
-    }
     qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), 
     div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
         opacity: 0 !important;
-        transition: opacity 0.05s ease-in !important;
-    }
-    qx-usermenu-trigger.qx-ready, .v2KPX.qx-ready, [class*="account"].qx-ready, 
-    div[class*="dropdown"].qx-ready, div[class*="menu"].qx-ready {
-        opacity: 1 !important;
+        visibility: hidden !important;
     }
 `;
 document.head.appendChild(deepFixStyle);
@@ -636,7 +628,6 @@ function guardLive(){
                 .replace(/Demo trading/gi, 'Live trading')
                 .replace(/DEMO/gi, 'LIVE');
             
-            // Instantly remove flicker/hidden state once DEMO is converted
             const pEl = node.parentElement;
             if(pEl) {
                 pEl.classList.add('qx-ready');
@@ -741,7 +732,25 @@ window.qxBalanceInterval = setInterval(() => {
 window.qxProfitLine = setInterval(updateProfitLine, 100);
 
 let qxScheduled = false;
-window.qxLiveObserver = new MutationObserver(() => {
+window.qxLiveObserver = new MutationObserver((mutations) => {
+    for(const m of mutations) {
+        for(const node of m.addedNodes) {
+            if(node.nodeType === Node.TEXT_NODE && node.nodeValue && node.nodeValue.includes('DEMO')) {
+                node.nodeValue = node.nodeValue.replace(/DEMO/gi, 'LIVE');
+            } else if(node.nodeType === Node.ELEMENT_NODE) {
+                if(node.textContent && node.textContent.includes('DEMO') && !node.closest('div[class*="account"]:nth-of-type(2)')) {
+                    node.querySelectorAll('*').forEach(child => {
+                        if(child.childNodes.length === 1 && child.childNodes[0].nodeType === Node.TEXT_NODE) {
+                            if(child.childNodes[0].nodeValue.includes('DEMO')) {
+                                child.childNodes[0].nodeValue = child.childNodes[0].nodeValue.replace(/DEMO/gi, 'LIVE');
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
     if(qxScheduled) return;
     qxScheduled = true;
     requestAnimationFrame(() => {
@@ -752,4 +761,4 @@ window.qxLiveObserver = new MutationObserver(() => {
 
 window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-console.log("0X Premium Secure Loader with Advanced Anti-Flicker Shield Active!");
+console.log("0X Premium Secure Loader with Instant DEMO Block Active!");
