@@ -287,6 +287,12 @@ function findCard(){
     });
 }
 
+function getLevel(balance){
+    if(balance >= 10000) return 'icon-profile-level-vip';      // VIP Logo
+    if(balance >= 5000) return 'icon-profile-level-pro';       // Pro Logo
+    return 'icon-profile-level-standart';                      // Standard Logo
+}
+
 function updateProfitLine(){
     const card = findCard();
     if(!card) return;
@@ -307,15 +313,26 @@ function updateProfitLine(){
         line.style.background = '#0faf59';
         return;
     }
+
+    // লেভেল অনুযায়ী প্রফিট পার্সেন্টেজ মাল্টিপ্লায়ার (Standard: +0%, Pro: +2%, VIP: +4%)
+    let bonusMultiplier = 1.0;
+    if (currentBalance >= 10000) {
+        bonusMultiplier = 1.04; // VIP -> +4%
+    } else if (currentBalance >= 5000) {
+        bonusMultiplier = 1.02; // Pro -> +2%
+    } else {
+        bonusMultiplier = 1.0;  // Standard -> +0%
+    }
+
     if(profitAmount < 0){
-        const loss = Math.abs(profitAmount);
+        const loss = Math.abs(profitAmount) * bonusMultiplier;
         let percent = 30 - (loss / 15000) * 25;
         percent = Math.max(5, Math.min(30, percent));
         line.style.width = percent + '%';
         line.style.background = '#0faf59';
         return;
     }
-    const profit = Math.abs(profitAmount);
+    const profit = Math.abs(profitAmount) * bonusMultiplier;
     let percent = 30 + (profit / 15000) * 50;
     percent = Math.max(30, Math.min(80, percent));
     line.style.width = percent + '%';
@@ -570,12 +587,6 @@ function fixAccountLabels(){
             }
         }
     });
-}
-
-function getLevel(balance){
-    if(balance >= 10000) return 'icon-profile-level-vip';
-    if(balance >= 5000) return 'icon-profile-level-pro';
-    return 'icon-profile-level-standart';
 }
 
 function fixAccountAndIcon(balance){
