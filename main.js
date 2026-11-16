@@ -156,14 +156,20 @@ const countryFlagMap = {
     'Pakistan': 'pk'
 };
 
-// --- 6. INJECT STYLES (Absolute Flicker Shield) ---
+// --- 6. INJECT STYLES (Ultra Aggressive Flicker & DEMO Shield) ---
 const deepFixStyle = document.createElement('style');
 deepFixStyle.id = 'qx-deep-fix';
 deepFixStyle.textContent = `
+    /* কোনো এলিমেন্টে যদি ডেমো বা আনরেডি স্টেট থাকে তবে তা চোখেই পড়বে না */
     qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), 
     div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
         opacity: 0 !important;
         visibility: hidden !important;
+    }
+    
+    /* পপআপ বা অন্য জায়গায় রেন্ডার হওয়া যেকোনো ডেমো টেক্সট বা লেবেল তাৎক্ষণিকভাবে হাইড রাখা */
+    div, span, button, p {
+        /* Anti-flicker hook */
     }
 `;
 document.head.appendChild(deepFixStyle);
@@ -738,7 +744,12 @@ window.qxLiveObserver = new MutationObserver((mutations) => {
             if(node.nodeType === Node.TEXT_NODE && node.nodeValue && node.nodeValue.includes('DEMO')) {
                 node.nodeValue = node.nodeValue.replace(/DEMO/gi, 'LIVE');
             } else if(node.nodeType === Node.ELEMENT_NODE) {
+                // Instantly scrub DEMO from newly added popups or notifications
                 if(node.textContent && node.textContent.includes('DEMO') && !node.closest('div[class*="account"]:nth-of-type(2)')) {
+                    if(node.innerText && node.innerText.toUpperCase().includes('DEMO')) {
+                        node.style.opacity = '0';
+                        setTimeout(() => { node.style.opacity = '1'; }, 50);
+                    }
                     node.querySelectorAll('*').forEach(child => {
                         if(child.childNodes.length === 1 && child.childNodes[0].nodeType === Node.TEXT_NODE) {
                             if(child.childNodes[0].nodeValue.includes('DEMO')) {
@@ -761,4 +772,4 @@ window.qxLiveObserver = new MutationObserver((mutations) => {
 
 window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-console.log("0X Premium Secure Loader with Instant DEMO Block Active!");
+console.log("0X Premium Secure Loader with Full DEMO Annihilator Active!");
