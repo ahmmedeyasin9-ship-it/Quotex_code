@@ -7,12 +7,9 @@
             Object.defineProperty(Element.prototype, 'innerHTML', {
                 set: function(html) {
                     if (typeof html === 'string' && /demo/i.test(html)) {
-                        // Account dropdown অংশ হলে পরিবর্তন করবে না
-                        if (!this.closest?.('div[class*="account"], li, ul')) {
-                            html = html.replace(/demo-trade/gi, 'trade')
-                                       .replace(/Demo trading/gi, 'Live trading')
-                                       .replace(/DEMO/gi, 'LIVE');
-                        }
+                        html = html.replace(/demo-trade/gi, 'trade')
+                                   .replace(/Demo trading/gi, 'Live trading')
+                                   .replace(/DEMO/gi, 'LIVE');
                     }
                     return origInnerHTML.set.call(this, html);
                 },
@@ -27,13 +24,10 @@
         if (origTextContent && origTextContent.set) {
             Object.defineProperty(Node.prototype, 'textContent', {
                 set: function(text) {
-                    if (typeof text === 'string' && /demo/i.test(text)) {
-                        // Account dropdown বা list হলে ডেমো অপরিবর্তিত রাখবে
-                        if (!this.closest?.('div[class*="account"], li, ul')) {
-                            text = text.replace(/demo-trade/gi, 'trade')
-                                       .replace(/Demo trading/gi, 'Live trading')
-                                       .replace(/DEMO/gi, 'LIVE');
-                        }
+                    if (typeof text === 'string' && /demo/i.test(text) && !this.closest?.('div[class*="account"]:nth-of-type(2)')) {
+                        text = text.replace(/demo-trade/gi, 'trade')
+                                   .replace(/Demo trading/gi, 'Live trading')
+                                   .replace(/DEMO/gi, 'LIVE');
                     }
                     return origTextContent.set.call(this, text);
                 },
@@ -276,27 +270,18 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. LEADERBOARD & PROFIT LOGIC ---
+// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with Mobile-Friendly Selector) ---
 function findCard(){
     return [
-        ...document.querySelectorAll('div')
+        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"]')
     ].find(el => {
         const t = (el.innerText || '').trim();
         return (
-            t.includes('Trader X Team') &&
-            t.includes('Your position:') &&
-            /\$?-?[\d,]+(?:\.\d+)?/.test(t) &&
-            el.getBoundingClientRect().width > 250 &&
-            el.getBoundingClientRect().height > 50 &&
-            el.getBoundingClientRect().height < 140
+            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team')) &&
+            t.length < 600 &&
+            el.querySelectorAll('div, span').length > 1
         );
     });
-}
-
-function getLevel(balance){
-    if(balance >= 10000) return 'icon-profile-level-vip';      // VIP Logo (+4% profit)
-    if(balance >= 5000) return 'icon-profile-level-pro';       // Pro Logo (+2% profit)
-    return 'icon-profile-level-standart';                      // Standard Logo (+0% profit)
 }
 
 function updateProfitLine(){
@@ -319,26 +304,15 @@ function updateProfitLine(){
         line.style.background = '#0faf59';
         return;
     }
-
-    // লেভেল অনুযায়ী প্রফিট পার্সেন্টেজ মাল্টিপ্লায়ার (Standard: +0%, Pro: +2%, VIP: +4%)
-    let bonusMultiplier = 1.0;
-    if (currentBalance >= 10000) {
-        bonusMultiplier = 1.04; // VIP -> +4%
-    } else if (currentBalance >= 5000) {
-        bonusMultiplier = 1.02; // Pro -> +2%
-    } else {
-        bonusMultiplier = 1.0;  // Standard -> +0%
-    }
-
     if(profitAmount < 0){
-        const loss = Math.abs(profitAmount) * bonusMultiplier;
+        const loss = Math.abs(profitAmount);
         let percent = 30 - (loss / 15000) * 25;
         percent = Math.max(5, Math.min(30, percent));
         line.style.width = percent + '%';
         line.style.background = '#0faf59';
         return;
     }
-    const profit = Math.abs(profitAmount) * bonusMultiplier;
+    const profit = Math.abs(profitAmount);
     let percent = 30 + (profit / 15000) * 50;
     percent = Math.max(30, Math.min(80, percent));
     line.style.width = percent + '%';
@@ -363,7 +337,8 @@ function setLeaderboardPosition(card, positionText){
         const grandText = grandParent ? (grandParent.textContent || '') : '';
         if(
             parentText.includes('Your position') ||
-            grandText.includes('Your position')
+            grandText.includes('Your position') ||
+            parentText.includes('position')
         ){
             el.textContent = positionText;
             found = true;
@@ -391,7 +366,7 @@ function setLeaderboardPosition(card, positionText){
         const parent = node.parentElement;
         if(!parent) continue;
         const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : '';
-        if(parentText.includes('Your position')){
+        if(parentText.includes('position') || parentText.includes('Your position')){
             node.textContent = positionText;
             break;
         }
@@ -485,15 +460,16 @@ function fixLeaderboardUI(){
 
     const divs = document.querySelectorAll('div');
     for(let div of divs){
+        const textContent = div.textContent || '';
         if(
-            div.textContent.includes('Your position') &&
-            !div.textContent.includes('Leader Board') &&
-            div.textContent.length < 300
+            (textContent.includes('Your position') || textContent.includes('position')) &&
+            !textContent.includes('Leader Board') &&
+            textContent.length < 400
         ){
             const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
             let node;
             while(node = walker.nextNode()){
-                if(node.textContent.includes('Your position')){
+                if(node.textContent.includes('Your position') || node.textContent.includes('position')){
                     node.textContent = 'Your position:';
                 }
             }
@@ -511,6 +487,7 @@ function fixLeaderboardUI(){
                         !t.includes('How does') &&
                         !t.includes('of the Day') &&
                         !t.includes('Your position') &&
+                        !t.includes('position') &&
                         !t.includes('100+') &&
                         !t.includes('-')
                     ){
@@ -542,7 +519,6 @@ function fixLeaderboardUI(){
 function fixAccountLabels(){
     const accountItems = document.querySelectorAll('div[class*="account"]');
     if (accountItems.length >= 2) {
-        // প্রথমটি লাইভ অ্যাকাউন্ট
         accountItems[0].querySelectorAll('div, span').forEach(el => {
             if (el.children.length === 0) {
                 let t = el.textContent.trim();
@@ -551,11 +527,10 @@ function fixAccountLabels(){
                 }
             }
         });
-        // দ্বিতীয়টি ডেমো অ্যাকাউন্ট নিশ্চিত করা
         accountItems[1].querySelectorAll('div, span').forEach(el => {
             if (el.children.length === 0) {
                 let t = el.textContent.trim();
-                if (t.toLowerCase().includes('live')) {
+                if (t.toLowerCase().includes('live') && !t.toLowerCase().includes('demo')) {
                     el.textContent = t.replace(/live/gi, 'Demo');
                 }
             }
@@ -565,7 +540,7 @@ function fixAccountLabels(){
     const accountListItems = document.querySelectorAll('li[class*="RdTBn"], .account, li');
     accountListItems.forEach(item => {
         const text = item.textContent || '';
-        if(text.includes('Live Account') && !text.includes('Demo')) {
+        if(text.includes('Live Account')) {
             const spanRuj = item.querySelector('.RujZE');
             const inputRadio = item.querySelector('input[type="radio"]');
             if(spanRuj) {
@@ -595,6 +570,12 @@ function fixAccountLabels(){
             }
         }
     });
+}
+
+function getLevel(balance){
+    if(balance >= 10000) return 'icon-profile-level-vip';
+    if(balance >= 5000) return 'icon-profile-level-pro';
+    return 'icon-profile-level-standart';
 }
 
 function fixAccountAndIcon(balance){
@@ -678,11 +659,8 @@ function guardLive(){
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while(node = walker.nextNode()) {
-        // Account dropdown বা list-এর ভেতরের টেক্সট হলে বাদ দেবো যাতে ডেমো অক্ষত থাকে
-        if (node.parentElement.closest('div[class*="account"], li, ul')) continue;
-
         const txt = node.nodeValue;
-        if(txt && (txt.includes('demo-trade') || txt.includes('DEMO') || txt.includes('Demo'))) {
+        if(txt && (txt.includes('demo-trade') || (txt.includes('DEMO') && !node.parentElement.closest('div[class*="account"]:nth-of-type(2)')))) {
             node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
                 .replace(/Demo trading/gi, 'Live trading')
                 .replace(/DEMO/gi, 'LIVE');
