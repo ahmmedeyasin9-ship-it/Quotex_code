@@ -267,17 +267,21 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. FIXED LEADERBOARD & PROFIT LOGIC (Fixed Element Selector) ---
+// --- 7. FIXED LEADERBOARD & PROFIT LOGIC (Based on Screenshot UI) ---
 function findCard(){
-    // লিডারবোর্ড প্যানেল ওপেন হলে সঠিক কার্ডটি খুঁজে বের করার নতুন ও নিখুঁত লজিক
+    // Directly target the container holding "Your position" based on the screenshot
     const allDivs = document.querySelectorAll('div');
     for(const el of allDivs) {
         const t = (el.innerText || '').trim();
-        if ((t.includes('Leader Board') || t.includes('of the Day')) && t.includes('Your position') && t.length < 500) {
+        if (t.includes('Your position') && t.includes('Leader Board') && t.length < 500) {
             return el;
         }
     }
-    return null;
+    // Fallback search
+    return [...document.querySelectorAll('div')].find(el => {
+        const t = (el.innerText || '').trim();
+        return t.includes('Your position') && t.length < 400;
+    });
 }
 
 function updateProfitLine(){
@@ -456,7 +460,7 @@ function fixLeaderboardUI(){
     const countryCode = countryFlagMap[activeCountry] || 'bd';
     const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
 
-    // কার্ডের ভেতরে থাকা প্রফাইলের নাম (যেমন Mahin) পরিবর্তন করে customName বসানো
+    // Replace profile name (e.g., "Mahin") inside the card with customName
     const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while(node = walker.nextNode()){
@@ -490,7 +494,7 @@ function fixLeaderboardUI(){
         }
     }
 
-    // প্রফিট অ্যামাউন্ট আপডেট করা
+    // Update profit amount display
     card.querySelectorAll('div, span').forEach(el => {
         if(el.children.length === 0){
             let t = el.textContent.trim();
