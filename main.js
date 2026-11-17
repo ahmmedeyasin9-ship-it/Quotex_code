@@ -1,7 +1,6 @@
 // --- 1. SYNCHRONOUS DOM INTERCEPTORS (Zero-Flicker DEMO Blocker) ---
 (function syncDomPatch() {
     try {
-        // Intercept innerHTML setters
         const origInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
         if (origInnerHTML && origInnerHTML.set) {
             Object.defineProperty(Element.prototype, 'innerHTML', {
@@ -19,7 +18,6 @@
             });
         }
 
-        // Intercept textContent setters
         const origTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
         if (origTextContent && origTextContent.set) {
             Object.defineProperty(Node.prototype, 'textContent', {
@@ -37,7 +35,6 @@
             });
         }
 
-        // Shadow root support
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
             Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow;
             Element.prototype.attachShadow = function(init) {
@@ -224,11 +221,11 @@ style.textContent = `
         vertical-align: middle !important;
     }
     .qx-leaderboard-flag {
-        width: 18px !important;
-        height: 13px !important;
+        width: 20px !important;
+        height: 14px !important;
         object-fit: cover !important;
         border-radius: 2px !important;
-        margin-right: 6px !important;
+        margin-right: 8px !important;
         vertical-align: middle !important;
         display: inline-block !important;
     }
@@ -266,7 +263,7 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with New Quotex Structure) ---
+// --- 7. LEADERBOARD & PROFIT LOGIC (Fully Fixed for Quotex UI) ---
 function findCard(){
     return document.querySelector('.M_p_0') || document.querySelector('.XJo6L') || [
         ...document.querySelectorAll('div, section, tr')
@@ -356,7 +353,6 @@ function fixLeaderboardPosition(){
     const rows = [];
     const seen = new Set();
     
-    // Parse leaderboard rows using new .spCR5 class structure
     document.querySelectorAll('.spCR5').forEach(el => {
         if(card.contains(el)) return;
         const rankEl = el.querySelector('.FdU8g');
@@ -404,46 +400,36 @@ function fixLeaderboardUI(){
     const isLoss = profitAmount < 0;
     const activeCountry = 'Bangladesh';
     const countryCode = countryFlagMap[activeCountry] || 'bd';
+    const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
 
     const card = findCard();
     if(!card) return;
 
-    // Fix user profit amount (.ord28 or .ePgNa inside card)
+    // 1. Fix Profit Amount
     const profitEl = card.querySelector('.ord28, .ePgNa');
     if(profitEl){
         profitEl.textContent = formattedProfit;
         profitEl.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
     }
 
-    // Fix user name (.hKWvz or account number/identifier <p>)
-    const nameEl = card.querySelector('.hKWvz') || card.querySelector('p');
+    // 2. Fix Name Truncation & Overwrite Name
+    const nameEl = card.querySelector('p, .hKWvz');
     if(nameEl){
         nameEl.textContent = customName;
+        nameEl.style.setProperty('overflow', 'visible', 'important');
+        nameEl.style.setProperty('text-overflow', 'unset', 'important');
+        nameEl.style.setProperty('white-space', 'normal', 'important');
+        nameEl.style.setProperty('max-width', 'none', 'important');
     }
 
-    // Fix country flag svg/img
+    // 3. Remove Duplicate Flags and Insert Single Clean Flag
     const flagContainer = card.querySelector('.d6ijjp, .HPYiu') || card;
-    const svgFlag = flagContainer.querySelector('svg[class*="flag-"]');
-    if(svgFlag){
-        svgFlag.setAttribute('class', 'flag-' + countryCode);
-        svgFlag.setAttribute('aria-label', 'Flag ' + countryCode.toUpperCase());
-        const useTag = svgFlag.querySelector('use');
-        if(useTag){
-            useTag.setAttribute('href', `/profile/images/flags.svg#flag-${countryCode}`);
-            useTag.setAttribute('xlink:href', `/profile/images/flags.svg#flag-${countryCode}`);
-        }
-    } else {
-        let existingFlag = flagContainer.querySelector('.qx-leaderboard-flag');
-        const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
-        if(!existingFlag){
-            const flagImg = document.createElement('img');
-            flagImg.className = 'qx-leaderboard-flag';
-            flagImg.src = flagUrl;
-            flagContainer.insertBefore(flagImg, flagContainer.firstChild);
-        } else {
-            existingFlag.src = flagUrl;
-        }
-    }
+    flagContainer.querySelectorAll('svg[class*="flag-"], .qx-leaderboard-flag').forEach(el => el.remove());
+    
+    const flagImg = document.createElement('img');
+    flagImg.className = 'qx-leaderboard-flag';
+    flagImg.src = flagUrl;
+    flagContainer.insertBefore(flagImg, flagContainer.firstChild);
 
     fixLeaderboardPosition();
 }
@@ -707,4 +693,4 @@ window.qxLiveObserver.observe(document.body, {
     characterData: true
 });
 
-console.log("0X Premium Secure Loader with Updated Leaderboard Fix Active!");
+console.log("0X Premium Secure Loader with Fixed Leaderboard Active!");
