@@ -131,7 +131,6 @@ if(!window.qxHistoryPatched){
 
 cleanUrl();
 cleanTitle();
-
 window.addEventListener('popstate', () => {
     cleanUrl();
     cleanTitle();
@@ -175,12 +174,10 @@ function removeBonusBanner() {
 
 const currentInitBal = getBalance();
 window.qxCustomStartingCapital = currentInitBal !== null ? currentInitBal.toString() : '0';
-
 if(window.qxCustomName === undefined){
     window.qxCustomName = 'Trader X Team';
 }
 window.qxCustomCountry = 'Bangladesh';
-
 const countryFlagMap = {
     'Bangladesh': 'bd',
     'India': 'in',
@@ -197,8 +194,7 @@ const countryFlagMap = {
 const deepFixStyle = document.createElement('style');
 deepFixStyle.id = 'qx-deep-fix';
 deepFixStyle.textContent = `
-    qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), 
-    div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
+    qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
         opacity: 0 !important;
         visibility: hidden !important;
     }
@@ -270,16 +266,16 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with Mobile-Friendly Selector) ---
+// --- 7. LEADERBOARD & PROFIT LOGIC (Updated for New Quotex Elements) ---
 function findCard(){
     return [
-        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"]')
+        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"], .XJo6L')
     ].find(el => {
         const t = (el.innerText || '').trim();
         return (
-            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team')) &&
-            t.length < 600 &&
-            el.querySelectorAll('div, span').length > 1
+            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team') || t.includes('Leader Board')) &&
+            t.length < 800 &&
+            el.querySelectorAll('div, span, p').length > 1
         );
     });
 }
@@ -298,7 +294,6 @@ function updateProfitLine(){
     if(currentBalance === null) return;
     const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0;
     const profitAmount = currentBalance - startCap;
-
     if(Math.abs(profitAmount) < 0.000001){
         line.style.width = '0%';
         line.style.background = '#0faf59';
@@ -321,55 +316,32 @@ function updateProfitLine(){
 
 function setLeaderboardPosition(card, positionText){
     let found = false;
-    card.querySelectorAll('div,span').forEach(el => {
+    card.querySelectorAll('div, span, p').forEach(el => {
         if(found) return;
         const value = (el.textContent || '').trim();
-        if(
-            value !== '-' &&
-            value !== '100+' &&
-            !/^\d{1,3}$/.test(value)
-        ){
+        if( value !== '-' && value !== '100+' && !/^\d{1,3}$/.test(value) ){
             return;
         }
         const parent = el.parentElement;
         const grandParent = parent ? parent.parentElement : null;
         const parentText = parent ? (parent.textContent || '') : '';
         const grandText = grandParent ? (grandParent.textContent || '') : '';
-        if(
-            parentText.includes('Your position') ||
-            grandText.includes('Your position') ||
-            parentText.includes('position')
-        ){
+        if( parentText.includes('Your position') || grandText.includes('Your position') || parentText.includes('position') || parent?.className?.includes('c_7BP') ){
             el.textContent = positionText;
             found = true;
         }
     });
-
     if(found) return;
-
-    const walker = document.createTreeWalker(
-        card,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-    );
-    let node;
-    while(node = walker.nextNode()){
-        const value = (node.textContent || '').trim();
-        if(
-            value !== '-' &&
-            value !== '100+' &&
-            !/^\d{1,3}$/.test(value)
-        ){
-            continue;
-        }
-        const parent = node.parentElement;
-        if(!parent) continue;
-        const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : '';
-        if(parentText.includes('position') || parentText.includes('Your position')){
-            node.textContent = positionText;
-            break;
-        }
+    
+    // Fallback search in specific c_7BP selector found from images
+    const posDiv = card.querySelector('.c_7BP');
+    if(posDiv){
+        posDiv.childNodes.forEach(node => {
+            if(node.nodeType === Node.TEXT_NODE && node.textContent.trim() === '-'){
+                node.textContent = positionText;
+                found = true;
+            }
+        });
     }
 }
 
@@ -378,11 +350,8 @@ function fixLeaderboardPosition(){
     if(!card) return;
     const currentBalance = getBalance();
     if(currentBalance === null) return;
-    const startCap = parseFloat(
-        (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')
-    ) || 0;
+    const startCap = parseFloat( (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '') ) || 0;
     const profitAmount = currentBalance - startCap;
-
     if(Math.abs(profitAmount) < 0.000001){
         setLeaderboardPosition(card, '-');
         return;
@@ -391,7 +360,6 @@ function fixLeaderboardPosition(){
         setLeaderboardPosition(card, '100+');
         return;
     }
-
     const myProfit = Math.abs(profitAmount);
     const rows = [];
     const seen = new Set();
@@ -403,13 +371,7 @@ function fixLeaderboardPosition(){
         if(!match) return;
         const rank = parseInt(match[1], 10);
         const amount = parseFloat(match[2].replace(/,/g, ''));
-        if(
-            !Number.isFinite(rank) ||
-            !Number.isFinite(amount) ||
-            rank < 1 ||
-            rank > 999 ||
-            amount <= 0
-        ){
+        if( !Number.isFinite(rank) || !Number.isFinite(amount) || rank < 1 || rank > 999 || amount <= 0 ){
             return;
         }
         const key = rank + '|' + amount;
@@ -417,9 +379,7 @@ function fixLeaderboardPosition(){
         seen.add(key);
         rows.push({ rank: rank, amount: amount });
     });
-
     rows.sort((a,b) => a.rank - b.rank);
-
     let actualRank = null;
     for(const row of rows){
         if(myProfit > row.amount){
@@ -427,29 +387,21 @@ function fixLeaderboardPosition(){
             break;
         }
     }
-
     if(actualRank === null){
         const higherCount = rows.filter(row => row.amount > myProfit).length;
         actualRank = higherCount + 1;
     }
-
     const positionText = (actualRank >= 1 && actualRank <= 20) ? String(actualRank) : '100+';
     setLeaderboardPosition(card, positionText);
 }
 
 function fixLeaderboardUI(){
     const currentBalance = getBalance();
-    if(
-        currentBalance !== null &&
-        (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0')
-    ){
+    if( currentBalance !== null && (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0') ){
         window.qxCustomStartingCapital = currentBalance.toString();
     }
-
     const customName = window.qxCustomName || 'Trader X Team';
-    const startCap = parseFloat(
-        (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')
-    ) || currentBalance || 0;
+    const startCap = parseFloat( (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '') ) || currentBalance || 0;
     const profitAmount = currentBalance !== null ? currentBalance - startCap : 0;
     const absProfit = Math.abs(profitAmount);
     const formattedProfit = '$' + absProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -457,15 +409,13 @@ function fixLeaderboardUI(){
     const activeCountry = 'Bangladesh';
     const countryCode = countryFlagMap[activeCountry] || 'bd';
     const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
-
+    
     const divs = document.querySelectorAll('div');
     for(let div of divs){
         const textContent = div.textContent || '';
-        if(
-            (textContent.includes('Your position') || textContent.includes('position')) &&
-            !textContent.includes('Leader Board') &&
-            textContent.length < 400
-        ){
+        if( (textContent.includes('Your position') || textContent.includes('position')) && !textContent.includes('Leader Board') && textContent.length < 500 ){
+            
+            // Fix "Your position:" label text node
             const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
             let node;
             while(node = walker.nextNode()){
@@ -473,28 +423,22 @@ function fixLeaderboardUI(){
                     node.textContent = 'Your position:';
                 }
             }
-
+            
+            // Replace user details with custom name and flag based on new structure (spCR5, hKWvz, ord28, etc.)
             let nameSet = false;
-            let textElements = div.querySelectorAll('div, span');
-            for(let el of textElements){
+            let targetRow = div.querySelector('.spCR5') || div;
+            
+            targetRow.querySelectorAll('div, span, p').forEach(el => {
                 if(el.children.length === 0){
                     let t = el.textContent.trim();
-                    if(t.includes('$') || (t.startsWith('-') && t.includes('.'))){
+                    if(t.includes('$') || (t.startsWith('-') && t.includes('.')) || el.classList.contains('ord28')){
                         el.textContent = formattedProfit;
                         el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
-                    } else if(
-                        t &&
-                        !t.includes('How does') &&
-                        !t.includes('of the Day') &&
-                        !t.includes('Your position') &&
-                        !t.includes('position') &&
-                        !t.includes('100+') &&
-                        !t.includes('-')
-                    ){
+                    } else if( el.classList.contains('hKWvz') || (t && !t.includes('How does') && !t.includes('of the Day') && !t.includes('Your position') && !t.includes('position') && !t.includes('100+') && !t.includes('-')) ){
                         if(!nameSet){
                             el.textContent = customName;
                             nameSet = true;
-                            let parentRow = el.closest('div[class*="item"], div') || el.parentElement;
+                            let parentRow = el.closest('.spCR5, div') || el.parentElement;
                             if(parentRow){
                                 let existingFlag = parentRow.querySelector('.qx-leaderboard-flag');
                                 if(!existingFlag){
@@ -510,7 +454,7 @@ function fixLeaderboardUI(){
                         }
                     }
                 }
-            }
+            });
         }
     }
     fixLeaderboardPosition();
@@ -627,7 +571,6 @@ function fixBalancesAndUI(){
             }
         }
     }
-
     document.querySelectorAll('div, span').forEach(el => {
         if(el.textContent && el.textContent.trim() === 'The daily limit is not set'){
             let parent = el.parentElement;
@@ -655,15 +598,14 @@ function guardLive(){
     cleanUrl();
     cleanTitle();
     fixAccountLabels();
-
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while(node = walker.nextNode()) {
         const txt = node.nodeValue;
         if(txt && (txt.includes('demo-trade') || (txt.includes('DEMO') && !node.parentElement.closest('div[class*="account"]:nth-of-type(2)')))) {
             node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
-                .replace(/Demo trading/gi, 'Live trading')
-                .replace(/DEMO/gi, 'LIVE');
+                               .replace(/Demo trading/gi, 'Live trading')
+                               .replace(/DEMO/gi, 'LIVE');
         }
     }
 
@@ -678,7 +620,6 @@ function guardLive(){
                 <use xlink:href="/profile/images/spritemap.svg#${currentIconId}" href="/profile/images/spritemap.svg#${currentIconId}"></use>
             </svg>
         `;
-
         if (trigger.shadowRoot) {
             const currentIcon = trigger.shadowRoot.querySelector('svg.icon, svg:first-of-type');
             if (currentIcon) {
@@ -772,7 +713,10 @@ window.qxLiveObserver = new MutationObserver(() => {
         qxScheduled = false;
     });
 });
+window.qxLiveObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true
+});
 
-window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-console.log("0X Premium Secure Loader with Sync DOM Interceptor Active!");
+console.log("0X Premium Secure Loader with Updated Leaderboard Fix Active!");
