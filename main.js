@@ -1,6 +1,7 @@
 // --- 1. SYNCHRONOUS DOM INTERCEPTORS (Zero-Flicker DEMO Blocker) ---
 (function syncDomPatch() {
     try {
+        // Intercept innerHTML setters
         const origInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
         if (origInnerHTML && origInnerHTML.set) {
             Object.defineProperty(Element.prototype, 'innerHTML', {
@@ -18,6 +19,7 @@
             });
         }
 
+        // Intercept textContent setters
         const origTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
         if (origTextContent && origTextContent.set) {
             Object.defineProperty(Node.prototype, 'textContent', {
@@ -35,6 +37,7 @@
             });
         }
 
+        // Shadow root support
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
             Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow;
             Element.prototype.attachShadow = function(init) {
@@ -267,20 +270,17 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. FIXED LEADERBOARD & PROFIT LOGIC (Based on Screenshot UI) ---
+// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with Mobile-Friendly Selector) ---
 function findCard(){
-    // Directly target the container holding "Your position" based on the screenshot
-    const allDivs = document.querySelectorAll('div');
-    for(const el of allDivs) {
+    return [
+        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"]')
+    ].find(el => {
         const t = (el.innerText || '').trim();
-        if (t.includes('Your position') && t.includes('Leader Board') && t.length < 500) {
-            return el;
-        }
-    }
-    // Fallback search
-    return [...document.querySelectorAll('div')].find(el => {
-        const t = (el.innerText || '').trim();
-        return t.includes('Your position') && t.length < 400;
+        return (
+            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team')) &&
+            t.length < 600 &&
+            el.querySelectorAll('div, span').length > 1
+        );
     });
 }
 
@@ -337,7 +337,8 @@ function setLeaderboardPosition(card, positionText){
         const grandText = grandParent ? (grandParent.textContent || '') : '';
         if(
             parentText.includes('Your position') ||
-            grandText.includes('Your position')
+            grandText.includes('Your position') ||
+            parentText.includes('position')
         ){
             el.textContent = positionText;
             found = true;
@@ -365,7 +366,7 @@ function setLeaderboardPosition(card, positionText){
         const parent = node.parentElement;
         if(!parent) continue;
         const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : '';
-        if(parentText.includes('Your position')){
+        if(parentText.includes('position') || parentText.includes('Your position')){
             node.textContent = positionText;
             break;
         }
@@ -437,9 +438,6 @@ function fixLeaderboardPosition(){
 }
 
 function fixLeaderboardUI(){
-    const card = findCard();
-    if(!card) return;
-
     const currentBalance = getBalance();
     if(
         currentBalance !== null &&
@@ -460,51 +458,61 @@ function fixLeaderboardUI(){
     const countryCode = countryFlagMap[activeCountry] || 'bd';
     const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
 
-    // Replace profile name (e.g., "Mahin") inside the card with customName
-    const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, null, false);
-    let node;
-    while(node = walker.nextNode()){
-        let t = node.nodeValue.trim();
+    const divs = document.querySelectorAll('div');
+    for(let div of divs){
+        const textContent = div.textContent || '';
         if(
-            t &&
-            !t.includes('Leader Board') &&
-            !t.includes('of the Day') &&
-            !t.includes('Your position') &&
-            !t.includes('How does') &&
-            !t.startsWith('$') &&
-            !t.startsWith('-') &&
-            t !== '-' &&
-            t !== '100+' &&
-            !/^\d+$/.test(t)
+            (textContent.includes('Your position') || textContent.includes('position')) &&
+            !textContent.includes('Leader Board') &&
+            textContent.length < 400
         ){
-            node.nodeValue = customName;
-            let parentRow = node.parentElement;
-            if(parentRow){
-                let existingFlag = parentRow.querySelector('.qx-leaderboard-flag') || parentRow.parentElement?.querySelector('.qx-leaderboard-flag');
-                if(!existingFlag){
-                    const flagImg = document.createElement('img');
-                    flagImg.className = 'qx-leaderboard-flag';
-                    flagImg.src = flagUrl;
-                    parentRow.insertBefore(flagImg, node);
-                } else {
-                    existingFlag.src = flagUrl;
-                    existingFlag.style.display = 'inline-block';
+            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while(node = walker.nextNode()){
+                if(node.textContent.includes('Your position') || node.textContent.includes('position')){
+                    node.textContent = 'Your position:';
+                }
+            }
+
+            let nameSet = false;
+            let textElements = div.querySelectorAll('div, span');
+            for(let el of textElements){
+                if(el.children.length === 0){
+                    let t = el.textContent.trim();
+                    if(t.includes('$') || (t.startsWith('-') && t.includes('.'))){
+                        el.textContent = formattedProfit;
+                        el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
+                    } else if(
+                        t &&
+                        !t.includes('How does') &&
+                        !t.includes('of the Day') &&
+                        !t.includes('Your position') &&
+                        !t.includes('position') &&
+                        !t.includes('100+') &&
+                        !t.includes('-')
+                    ){
+                        if(!nameSet){
+                            el.textContent = customName;
+                            nameSet = true;
+                            let parentRow = el.closest('div[class*="item"], div') || el.parentElement;
+                            if(parentRow){
+                                let existingFlag = parentRow.querySelector('.qx-leaderboard-flag');
+                                if(!existingFlag){
+                                    const flagImg = document.createElement('img');
+                                    flagImg.className = 'qx-leaderboard-flag';
+                                    flagImg.src = flagUrl;
+                                    el.parentNode.insertBefore(flagImg, el);
+                                } else {
+                                    existingFlag.src = flagUrl;
+                                    existingFlag.style.display = 'inline-block';
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-
-    // Update profit amount display
-    card.querySelectorAll('div, span').forEach(el => {
-        if(el.children.length === 0){
-            let t = el.textContent.trim();
-            if(t.startsWith('$') && !t.includes('Your position')){
-                el.textContent = formattedProfit;
-                el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
-            }
-        }
-    });
-
     fixLeaderboardPosition();
 }
 
