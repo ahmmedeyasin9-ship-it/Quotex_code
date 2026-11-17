@@ -1,6 +1,7 @@
 // --- 1. SYNCHRONOUS DOM INTERCEPTORS (Zero-Flicker DEMO Blocker) ---
 (function syncDomPatch() {
     try {
+        // Intercept innerHTML setters
         const origInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
         if (origInnerHTML && origInnerHTML.set) {
             Object.defineProperty(Element.prototype, 'innerHTML', {
@@ -18,6 +19,7 @@
             });
         }
 
+        // Intercept textContent setters
         const origTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
         if (origTextContent && origTextContent.set) {
             Object.defineProperty(Node.prototype, 'textContent', {
@@ -35,6 +37,7 @@
             });
         }
 
+        // Shadow root support
         if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
             Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow;
             Element.prototype.attachShadow = function(init) {
@@ -128,6 +131,7 @@ if(!window.qxHistoryPatched){
 
 cleanUrl();
 cleanTitle();
+
 window.addEventListener('popstate', () => {
     cleanUrl();
     cleanTitle();
@@ -171,10 +175,12 @@ function removeBonusBanner() {
 
 const currentInitBal = getBalance();
 window.qxCustomStartingCapital = currentInitBal !== null ? currentInitBal.toString() : '0';
+
 if(window.qxCustomName === undefined){
     window.qxCustomName = 'Trader X Team';
 }
 window.qxCustomCountry = 'Bangladesh';
+
 const countryFlagMap = {
     'Bangladesh': 'bd',
     'India': 'in',
@@ -191,7 +197,8 @@ const countryFlagMap = {
 const deepFixStyle = document.createElement('style');
 deepFixStyle.id = 'qx-deep-fix';
 deepFixStyle.textContent = `
-    qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
+    qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), 
+    div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
         opacity: 0 !important;
         visibility: hidden !important;
     }
@@ -221,11 +228,11 @@ style.textContent = `
         vertical-align: middle !important;
     }
     .qx-leaderboard-flag {
-        width: 20px !important;
-        height: 14px !important;
+        width: 18px !important;
+        height: 13px !important;
         object-fit: cover !important;
         border-radius: 2px !important;
-        margin-right: 8px !important;
+        margin-right: 6px !important;
         vertical-align: middle !important;
         display: inline-block !important;
     }
@@ -263,13 +270,17 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. LEADERBOARD & PROFIT LOGIC (Fully Fixed for Quotex UI) ---
+// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with Mobile-Friendly Selector) ---
 function findCard(){
-    return document.querySelector('.M_p_0') || document.querySelector('.XJo6L') || [
-        ...document.querySelectorAll('div, section, tr')
+    return [
+        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"]')
     ].find(el => {
         const t = (el.innerText || '').trim();
-        return (t.includes('Leader Board') || t.includes('Your position') || t.includes('c_7BP')) && t.length < 1000;
+        return (
+            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team')) &&
+            t.length < 600 &&
+            el.querySelectorAll('div, span').length > 1
+        );
     });
 }
 
@@ -287,6 +298,7 @@ function updateProfitLine(){
     if(currentBalance === null) return;
     const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0;
     const profitAmount = currentBalance - startCap;
+
     if(Math.abs(profitAmount) < 0.000001){
         line.style.width = '0%';
         line.style.background = '#0faf59';
@@ -308,28 +320,55 @@ function updateProfitLine(){
 }
 
 function setLeaderboardPosition(card, positionText){
-    const posDiv = card.querySelector('.c_7BP');
-    if(posDiv){
-        let found = false;
-        posDiv.childNodes.forEach(node => {
-            if(node.nodeType === Node.TEXT_NODE){
-                const val = node.textContent.trim();
-                if(val === '-' || val === '100+' || /^\d{1,3}$/.test(val)){
-                    node.textContent = ' ' + positionText + ' ';
-                    found = true;
-                }
-            }
-        });
-        if(!found){
-            posDiv.querySelectorAll('div, span').forEach(el => {
-                if(!el.classList.contains('YkAuv')){
-                    el.textContent = positionText;
-                    found = true;
-                }
-            });
+    let found = false;
+    card.querySelectorAll('div,span').forEach(el => {
+        if(found) return;
+        const value = (el.textContent || '').trim();
+        if(
+            value !== '-' &&
+            value !== '100+' &&
+            !/^\d{1,3}$/.test(value)
+        ){
+            return;
         }
-        if(!found){
-            posDiv.appendChild(document.createTextNode(' ' + positionText));
+        const parent = el.parentElement;
+        const grandParent = parent ? parent.parentElement : null;
+        const parentText = parent ? (parent.textContent || '') : '';
+        const grandText = grandParent ? (grandParent.textContent || '') : '';
+        if(
+            parentText.includes('Your position') ||
+            grandText.includes('Your position') ||
+            parentText.includes('position')
+        ){
+            el.textContent = positionText;
+            found = true;
+        }
+    });
+
+    if(found) return;
+
+    const walker = document.createTreeWalker(
+        card,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+    );
+    let node;
+    while(node = walker.nextNode()){
+        const value = (node.textContent || '').trim();
+        if(
+            value !== '-' &&
+            value !== '100+' &&
+            !/^\d{1,3}$/.test(value)
+        ){
+            continue;
+        }
+        const parent = node.parentElement;
+        if(!parent) continue;
+        const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : '';
+        if(parentText.includes('position') || parentText.includes('Your position')){
+            node.textContent = positionText;
+            break;
         }
     }
 }
@@ -339,8 +378,11 @@ function fixLeaderboardPosition(){
     if(!card) return;
     const currentBalance = getBalance();
     if(currentBalance === null) return;
-    const startCap = parseFloat( (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '') ) || 0;
+    const startCap = parseFloat(
+        (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')
+    ) || 0;
     const profitAmount = currentBalance - startCap;
+
     if(Math.abs(profitAmount) < 0.000001){
         setLeaderboardPosition(card, '-');
         return;
@@ -349,22 +391,27 @@ function fixLeaderboardPosition(){
         setLeaderboardPosition(card, '100+');
         return;
     }
+
     const myProfit = Math.abs(profitAmount);
     const rows = [];
     const seen = new Set();
-    
-    document.querySelectorAll('.spCR5').forEach(el => {
+    document.querySelectorAll('div,li,tr').forEach(el => {
         if(card.contains(el)) return;
-        const rankEl = el.querySelector('.FdU8g');
-        const amountEl = el.querySelector('.ePgNa');
-        if(!rankEl || !amountEl) return;
-        
-        const rank = parseInt(rankEl.textContent.trim(), 10);
-        const amountText = amountEl.textContent.replace(/[^0-9.]/g, '');
-        const amount = parseFloat(amountText);
-        
-        if(!Number.isFinite(rank) || !Number.isFinite(amount) || amount <= 0) return;
-        
+        const text = (el.innerText || '').replace(/\s+/g, ' ').trim();
+        if(!text || text.length > 180) return;
+        const match = text.match(/^(\d{1,3})\s+.*?\$([\d,]+(?:\.\d+)?)(?:\+)?\s*$/);
+        if(!match) return;
+        const rank = parseInt(match[1], 10);
+        const amount = parseFloat(match[2].replace(/,/g, ''));
+        if(
+            !Number.isFinite(rank) ||
+            !Number.isFinite(amount) ||
+            rank < 1 ||
+            rank > 999 ||
+            amount <= 0
+        ){
+            return;
+        }
         const key = rank + '|' + amount;
         if(seen.has(key)) return;
         seen.add(key);
@@ -372,6 +419,7 @@ function fixLeaderboardPosition(){
     });
 
     rows.sort((a,b) => a.rank - b.rank);
+
     let actualRank = null;
     for(const row of rows){
         if(myProfit > row.amount){
@@ -379,21 +427,29 @@ function fixLeaderboardPosition(){
             break;
         }
     }
+
     if(actualRank === null){
         const higherCount = rows.filter(row => row.amount > myProfit).length;
         actualRank = higherCount + 1;
     }
+
     const positionText = (actualRank >= 1 && actualRank <= 20) ? String(actualRank) : '100+';
     setLeaderboardPosition(card, positionText);
 }
 
 function fixLeaderboardUI(){
     const currentBalance = getBalance();
-    if( currentBalance !== null && (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0') ){
+    if(
+        currentBalance !== null &&
+        (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0')
+    ){
         window.qxCustomStartingCapital = currentBalance.toString();
     }
+
     const customName = window.qxCustomName || 'Trader X Team';
-    const startCap = parseFloat( (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '') ) || currentBalance || 0;
+    const startCap = parseFloat(
+        (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')
+    ) || currentBalance || 0;
     const profitAmount = currentBalance !== null ? currentBalance - startCap : 0;
     const absProfit = Math.abs(profitAmount);
     const formattedProfit = '$' + absProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -402,35 +458,61 @@ function fixLeaderboardUI(){
     const countryCode = countryFlagMap[activeCountry] || 'bd';
     const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
 
-    const card = findCard();
-    if(!card) return;
+    const divs = document.querySelectorAll('div');
+    for(let div of divs){
+        const textContent = div.textContent || '';
+        if(
+            (textContent.includes('Your position') || textContent.includes('position')) &&
+            !textContent.includes('Leader Board') &&
+            textContent.length < 400
+        ){
+            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while(node = walker.nextNode()){
+                if(node.textContent.includes('Your position') || node.textContent.includes('position')){
+                    node.textContent = 'Your position:';
+                }
+            }
 
-    // 1. Fix Profit Amount
-    const profitEl = card.querySelector('.ord28, .ePgNa');
-    if(profitEl){
-        profitEl.textContent = formattedProfit;
-        profitEl.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
+            let nameSet = false;
+            let textElements = div.querySelectorAll('div, span');
+            for(let el of textElements){
+                if(el.children.length === 0){
+                    let t = el.textContent.trim();
+                    if(t.includes('$') || (t.startsWith('-') && t.includes('.'))){
+                        el.textContent = formattedProfit;
+                        el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
+                    } else if(
+                        t &&
+                        !t.includes('How does') &&
+                        !t.includes('of the Day') &&
+                        !t.includes('Your position') &&
+                        !t.includes('position') &&
+                        !t.includes('100+') &&
+                        !t.includes('-')
+                    ){
+                        if(!nameSet){
+                            el.textContent = customName;
+                            nameSet = true;
+                            let parentRow = el.closest('div[class*="item"], div') || el.parentElement;
+                            if(parentRow){
+                                let existingFlag = parentRow.querySelector('.qx-leaderboard-flag');
+                                if(!existingFlag){
+                                    const flagImg = document.createElement('img');
+                                    flagImg.className = 'qx-leaderboard-flag';
+                                    flagImg.src = flagUrl;
+                                    el.parentNode.insertBefore(flagImg, el);
+                                } else {
+                                    existingFlag.src = flagUrl;
+                                    existingFlag.style.display = 'inline-block';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-
-    // 2. Fix Name Truncation & Overwrite Name
-    const nameEl = card.querySelector('p, .hKWvz');
-    if(nameEl){
-        nameEl.textContent = customName;
-        nameEl.style.setProperty('overflow', 'visible', 'important');
-        nameEl.style.setProperty('text-overflow', 'unset', 'important');
-        nameEl.style.setProperty('white-space', 'normal', 'important');
-        nameEl.style.setProperty('max-width', 'none', 'important');
-    }
-
-    // 3. Remove Duplicate Flags and Insert Single Clean Flag
-    const flagContainer = card.querySelector('.d6ijjp, .HPYiu') || card;
-    flagContainer.querySelectorAll('svg[class*="flag-"], .qx-leaderboard-flag').forEach(el => el.remove());
-    
-    const flagImg = document.createElement('img');
-    flagImg.className = 'qx-leaderboard-flag';
-    flagImg.src = flagUrl;
-    flagContainer.insertBefore(flagImg, flagContainer.firstChild);
-
     fixLeaderboardPosition();
 }
 
@@ -545,6 +627,7 @@ function fixBalancesAndUI(){
             }
         }
     }
+
     document.querySelectorAll('div, span').forEach(el => {
         if(el.textContent && el.textContent.trim() === 'The daily limit is not set'){
             let parent = el.parentElement;
@@ -572,14 +655,15 @@ function guardLive(){
     cleanUrl();
     cleanTitle();
     fixAccountLabels();
+
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while(node = walker.nextNode()) {
         const txt = node.nodeValue;
         if(txt && (txt.includes('demo-trade') || (txt.includes('DEMO') && !node.parentElement.closest('div[class*="account"]:nth-of-type(2)')))) {
             node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
-                               .replace(/Demo trading/gi, 'Live trading')
-                               .replace(/DEMO/gi, 'LIVE');
+                .replace(/Demo trading/gi, 'Live trading')
+                .replace(/DEMO/gi, 'LIVE');
         }
     }
 
@@ -594,6 +678,7 @@ function guardLive(){
                 <use xlink:href="/profile/images/spritemap.svg#${currentIconId}" href="/profile/images/spritemap.svg#${currentIconId}"></use>
             </svg>
         `;
+
         if (trigger.shadowRoot) {
             const currentIcon = trigger.shadowRoot.querySelector('svg.icon, svg:first-of-type');
             if (currentIcon) {
@@ -687,10 +772,7 @@ window.qxLiveObserver = new MutationObserver(() => {
         qxScheduled = false;
     });
 });
-window.qxLiveObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    characterData: true
-});
 
-console.log("0X Premium Secure Loader with Fixed Leaderboard Active!");
+window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+console.log("0X Premium Secure Loader with Sync DOM Interceptor Active!");
