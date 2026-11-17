@@ -266,17 +266,13 @@ profitLineStyle.textContent = `
 `;
 document.head.appendChild(profitLineStyle);
 
-// --- 7. LEADERBOARD & PROFIT LOGIC (Updated for New Quotex Elements) ---
+// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with New Quotex Structure) ---
 function findCard(){
-    return [
-        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"], .XJo6L')
+    return document.querySelector('.M_p_0') || document.querySelector('.XJo6L') || [
+        ...document.querySelectorAll('div, section, tr')
     ].find(el => {
         const t = (el.innerText || '').trim();
-        return (
-            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team') || t.includes('Leader Board')) &&
-            t.length < 800 &&
-            el.querySelectorAll('div, span, p').length > 1
-        );
+        return (t.includes('Leader Board') || t.includes('Your position') || t.includes('c_7BP')) && t.length < 1000;
     });
 }
 
@@ -315,33 +311,29 @@ function updateProfitLine(){
 }
 
 function setLeaderboardPosition(card, positionText){
-    let found = false;
-    card.querySelectorAll('div, span, p').forEach(el => {
-        if(found) return;
-        const value = (el.textContent || '').trim();
-        if( value !== '-' && value !== '100+' && !/^\d{1,3}$/.test(value) ){
-            return;
-        }
-        const parent = el.parentElement;
-        const grandParent = parent ? parent.parentElement : null;
-        const parentText = parent ? (parent.textContent || '') : '';
-        const grandText = grandParent ? (grandParent.textContent || '') : '';
-        if( parentText.includes('Your position') || grandText.includes('Your position') || parentText.includes('position') || parent?.className?.includes('c_7BP') ){
-            el.textContent = positionText;
-            found = true;
-        }
-    });
-    if(found) return;
-    
-    // Fallback search in specific c_7BP selector found from images
     const posDiv = card.querySelector('.c_7BP');
     if(posDiv){
+        let found = false;
         posDiv.childNodes.forEach(node => {
-            if(node.nodeType === Node.TEXT_NODE && node.textContent.trim() === '-'){
-                node.textContent = positionText;
-                found = true;
+            if(node.nodeType === Node.TEXT_NODE){
+                const val = node.textContent.trim();
+                if(val === '-' || val === '100+' || /^\d{1,3}$/.test(val)){
+                    node.textContent = ' ' + positionText + ' ';
+                    found = true;
+                }
             }
         });
+        if(!found){
+            posDiv.querySelectorAll('div, span').forEach(el => {
+                if(!el.classList.contains('YkAuv')){
+                    el.textContent = positionText;
+                    found = true;
+                }
+            });
+        }
+        if(!found){
+            posDiv.appendChild(document.createTextNode(' ' + positionText));
+        }
     }
 }
 
@@ -363,22 +355,26 @@ function fixLeaderboardPosition(){
     const myProfit = Math.abs(profitAmount);
     const rows = [];
     const seen = new Set();
-    document.querySelectorAll('div,li,tr').forEach(el => {
+    
+    // Parse leaderboard rows using new .spCR5 class structure
+    document.querySelectorAll('.spCR5').forEach(el => {
         if(card.contains(el)) return;
-        const text = (el.innerText || '').replace(/\s+/g, ' ').trim();
-        if(!text || text.length > 180) return;
-        const match = text.match(/^(\d{1,3})\s+.*?\$([\d,]+(?:\.\d+)?)(?:\+)?\s*$/);
-        if(!match) return;
-        const rank = parseInt(match[1], 10);
-        const amount = parseFloat(match[2].replace(/,/g, ''));
-        if( !Number.isFinite(rank) || !Number.isFinite(amount) || rank < 1 || rank > 999 || amount <= 0 ){
-            return;
-        }
+        const rankEl = el.querySelector('.FdU8g');
+        const amountEl = el.querySelector('.ePgNa');
+        if(!rankEl || !amountEl) return;
+        
+        const rank = parseInt(rankEl.textContent.trim(), 10);
+        const amountText = amountEl.textContent.replace(/[^0-9.]/g, '');
+        const amount = parseFloat(amountText);
+        
+        if(!Number.isFinite(rank) || !Number.isFinite(amount) || amount <= 0) return;
+        
         const key = rank + '|' + amount;
         if(seen.has(key)) return;
         seen.add(key);
         rows.push({ rank: rank, amount: amount });
     });
+
     rows.sort((a,b) => a.rank - b.rank);
     let actualRank = null;
     for(const row of rows){
@@ -408,55 +404,47 @@ function fixLeaderboardUI(){
     const isLoss = profitAmount < 0;
     const activeCountry = 'Bangladesh';
     const countryCode = countryFlagMap[activeCountry] || 'bd';
-    const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
-    
-    const divs = document.querySelectorAll('div');
-    for(let div of divs){
-        const textContent = div.textContent || '';
-        if( (textContent.includes('Your position') || textContent.includes('position')) && !textContent.includes('Leader Board') && textContent.length < 500 ){
-            
-            // Fix "Your position:" label text node
-            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
-            let node;
-            while(node = walker.nextNode()){
-                if(node.textContent.includes('Your position') || node.textContent.includes('position')){
-                    node.textContent = 'Your position:';
-                }
-            }
-            
-            // Replace user details with custom name and flag based on new structure (spCR5, hKWvz, ord28, etc.)
-            let nameSet = false;
-            let targetRow = div.querySelector('.spCR5') || div;
-            
-            targetRow.querySelectorAll('div, span, p').forEach(el => {
-                if(el.children.length === 0){
-                    let t = el.textContent.trim();
-                    if(t.includes('$') || (t.startsWith('-') && t.includes('.')) || el.classList.contains('ord28')){
-                        el.textContent = formattedProfit;
-                        el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
-                    } else if( el.classList.contains('hKWvz') || (t && !t.includes('How does') && !t.includes('of the Day') && !t.includes('Your position') && !t.includes('position') && !t.includes('100+') && !t.includes('-')) ){
-                        if(!nameSet){
-                            el.textContent = customName;
-                            nameSet = true;
-                            let parentRow = el.closest('.spCR5, div') || el.parentElement;
-                            if(parentRow){
-                                let existingFlag = parentRow.querySelector('.qx-leaderboard-flag');
-                                if(!existingFlag){
-                                    const flagImg = document.createElement('img');
-                                    flagImg.className = 'qx-leaderboard-flag';
-                                    flagImg.src = flagUrl;
-                                    el.parentNode.insertBefore(flagImg, el);
-                                } else {
-                                    existingFlag.src = flagUrl;
-                                    existingFlag.style.display = 'inline-block';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+
+    const card = findCard();
+    if(!card) return;
+
+    // Fix user profit amount (.ord28 or .ePgNa inside card)
+    const profitEl = card.querySelector('.ord28, .ePgNa');
+    if(profitEl){
+        profitEl.textContent = formattedProfit;
+        profitEl.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
+    }
+
+    // Fix user name (.hKWvz or account number/identifier <p>)
+    const nameEl = card.querySelector('.hKWvz') || card.querySelector('p');
+    if(nameEl){
+        nameEl.textContent = customName;
+    }
+
+    // Fix country flag svg/img
+    const flagContainer = card.querySelector('.d6ijjp, .HPYiu') || card;
+    const svgFlag = flagContainer.querySelector('svg[class*="flag-"]');
+    if(svgFlag){
+        svgFlag.setAttribute('class', 'flag-' + countryCode);
+        svgFlag.setAttribute('aria-label', 'Flag ' + countryCode.toUpperCase());
+        const useTag = svgFlag.querySelector('use');
+        if(useTag){
+            useTag.setAttribute('href', `/profile/images/flags.svg#flag-${countryCode}`);
+            useTag.setAttribute('xlink:href', `/profile/images/flags.svg#flag-${countryCode}`);
+        }
+    } else {
+        let existingFlag = flagContainer.querySelector('.qx-leaderboard-flag');
+        const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
+        if(!existingFlag){
+            const flagImg = document.createElement('img');
+            flagImg.className = 'qx-leaderboard-flag';
+            flagImg.src = flagUrl;
+            flagContainer.insertBefore(flagImg, flagContainer.firstChild);
+        } else {
+            existingFlag.src = flagUrl;
         }
     }
+
     fixLeaderboardPosition();
 }
 
