@@ -1,778 +1,410 @@
-// --- 1. SYNCHRONOUS DOM INTERCEPTORS (Zero-Flicker DEMO Blocker) ---
-(function syncDomPatch() {
-    try {
-        // Intercept innerHTML setters
-        const origInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
-        if (origInnerHTML && origInnerHTML.set) {
-            Object.defineProperty(Element.prototype, 'innerHTML', {
-                set: function(html) {
-                    if (typeof html === 'string' && /demo/i.test(html)) {
-                        html = html.replace(/demo-trade/gi, 'trade')
-                                   .replace(/Demo trading/gi, 'Live trading')
-                                   .replace(/DEMO/gi, 'LIVE');
-                    }
-                    return origInnerHTML.set.call(this, html);
-                },
-                get: function() {
-                    return origInnerHTML.get.call(this);
-                }
-            });
-        }
+// ==UserScript==
+// @name         License Client & Server Code Runner
+// @namespace    https://demotoliveadmin.lovable.app
+// @version      3.5.0
+// @description  Verifies license and executes remote server code dynamically
+// @match        *://*/*
+// @grant        none
+// ==/UserScript==
 
-        // Intercept textContent setters
-        const origTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
-        if (origTextContent && origTextContent.set) {
-            Object.defineProperty(Node.prototype, 'textContent', {
-                set: function(text) {
-                    if (typeof text === 'string' && /demo/i.test(text) && !this.closest?.('div[class*="account"]:nth-of-type(2)')) {
-                        text = text.replace(/demo-trade/gi, 'trade')
-                                   .replace(/Demo trading/gi, 'Live trading')
-                                   .replace(/DEMO/gi, 'LIVE');
-                    }
-                    return origTextContent.set.call(this, text);
-                },
-                get: function() {
-                    return origTextContent.get.call(this);
-                }
-            });
-        }
+(function () {
+  'use strict';
 
-        // Shadow root support
-        if (typeof Element !== 'undefined' && !Element.prototype.__zeroxOrigAttach) {
-            Element.prototype.__zeroxOrigAttach = Element.prototype.attachShadow;
-            Element.prototype.attachShadow = function(init) {
-                const shadow = Element.prototype.__zeroxOrigAttach.call(this, { ...init, mode: 'open' });
-                this.__zeroxShadowRoot = shadow;
-                return shadow;
-            };
-        }
-    } catch(e) {}
-})();
+  // --- কনফিগারেশন ---
+  const API_BASE = 'https://demotoliveadmin.lovable.app';
+  const TELEGRAM_URL = 'https://t.me/tradereyasin7';
+  const AVATAR_URL = 'https://i.postimg.cc/W1xNxw0S/file-00000000acd08230b081904c2c4ce41c.png';
 
-// --- 2. EARLY UNIVERSAL WATERMARK INTERCEPTOR ---
-(function earlyPatch() {
-    try {
-        if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.__zeroxEarlyContextPatched) {
-            HTMLCanvasElement.prototype.__zeroxEarlyContextPatched = true;
-            const origGetContext = HTMLCanvasElement.prototype.getContext;
-            HTMLCanvasElement.prototype.getContext = function(type) {
-                if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
-                    return null;
-                }
-                const ctx = origGetContext.apply(this, arguments);
-                if (ctx && (type === '2d' || type === 'experimental-2d')) {
-                    if (!ctx.__zeroxWatermarkBlocked) {
-                        ctx.__zeroxWatermarkBlocked = true;
-                        const _s = ctx.stroke;
-                        ctx.stroke = function(path) {
-                            if (ctx.globalAlpha > 0 && ctx.globalAlpha < 0.12) return;
-                            return path ? _s.call(ctx, path) : _s.call(ctx);
-                        };
-                        const _f = ctx.fill;
-                        if (_f) {
-                            ctx.fill = function(path) {
-                                if (ctx.globalAlpha > 0 && ctx.globalAlpha < 0.12) return;
-                                return path ? _f.call(ctx, path) : _f.call(ctx);
-                            };
-                        }
-                    }
-                }
-                return ctx;
-            };
-        }
-    } catch(e) {}
-})();
+  // আপনি যদি কোনো আলাদা CDN বা সার্ভারে কোড রাখেন তবে এখানে URL দিতে পারেন
+  const REMOTE_CODE_FALLBACK_URL = ''; 
 
-// --- 3. CLEANUP PREVIOUS INSTANCES ---
-window.qxLiveObserver?.disconnect();
-clearInterval(window.qxUrlForceInterval);
-clearInterval(window.qxBalanceInterval);
-clearInterval(window.qxProfitLine);
-window.qxProfitLine = null;
-document.getElementById('qx-combined-style')?.remove();
-document.getElementById('qx-profit-line-style')?.remove();
-document.getElementById('qx-deep-fix')?.remove();
+  const STORAGE = {
+    KEY: 'appActivation',
+    TOKEN: 'appDeviceToken',
+    DEVICE_ID: 'appDeviceId'
+  };
 
-// --- 4. CONFIGURATION & URL/TITLE GUARDS ---
-const cleanUrl = () => {
-    if (window.location.pathname.includes('demo-trade')) {
-        const cleanPath = window.location.pathname.replace('demo-trade', 'trade');
-        window.history.replaceState(window.history.state, '', cleanPath);
+  function getDeviceId() {
+    let id = localStorage.getItem(STORAGE.DEVICE_ID);
+    if (!id) {
+      id = 'dev_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+      localStorage.setItem(STORAGE.DEVICE_ID, id);
     }
-};
+    return id;
+  }
 
-const cleanTitle = () => {
-    if (document.title.toLowerCase().includes('demo')) {
-        document.title = document.title.replace(/demo/gi, 'Live');
-    }
-};
-
-if(!window.qxHistoryPatched){
-    window.qxHistoryPatched = true;
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-    history.pushState = function(state, title, url){
-        if(url && typeof url === 'string' && url.includes('demo-trade')){
-            url = url.replace('demo-trade', 'trade');
-        }
-        const res = originalPushState.apply(this, arguments);
-        cleanTitle();
-        return res;
+  function getMeta() {
+    const ua = navigator.userAgent;
+    return {
+      browser: /Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : 'Other',
+      os: /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'macOS' : 'Other',
+      device_type: /Mobile|Android/.test(ua) ? 'mobile' : 'desktop'
     };
-    history.replaceState = function(state, title, url){
-        if(url && typeof url === 'string' && url.includes('demo-trade')){
-            url = url.replace('demo-trade', 'trade');
-        }
-        const res = originalReplaceState.apply(this, arguments);
-        cleanTitle();
-        return res;
-    };
-}
+  }
 
-cleanUrl();
-cleanTitle();
-
-window.addEventListener('popstate', () => {
-    cleanUrl();
-    cleanTitle();
-});
-
-window.qxUrlForceInterval = setInterval(() => {
-    if(window.location.href.includes('demo-trade')){
-        try{
-            window.history.replaceState({}, '', window.location.href.replace('demo-trade', 'trade'));
-        }catch(e){}
-    }
-    cleanTitle();
-}, 10);
-
-// --- 5. CORE HELPER FUNCTIONS ---
-function getBalance(){
-    const all = document.querySelectorAll('.zt1hG, header div, header span, .v2KPX');
-    for(const el of all){
-        const text = el.textContent.trim();
-        if(!text.includes('$')) continue;
-        const clean = text.replace(/,/g,'').replace('$','').replace(/LIVE/gi,'').replace(/DEMO/gi,'').trim();
-        const n = parseFloat(clean);
-        if(Number.isFinite(n) && n >= 0 && n < 100000000){
-            return n;
-        }
-    }
-    return null;
-}
-
-function removeBonusBanner() {
-    const allDivs = document.querySelectorAll('div, section, aside');
-    allDivs.forEach(el => {
-        const text = el.textContent || '';
-        if(text.includes('50% bonus') || text.includes('bonus on your deposit') || text.includes('Get a 50%')){
-            if(el.offsetHeight > 0 && el.offsetHeight < 400){
-                el.style.setProperty('display', 'none', 'important');
-            }
-        }
+  // --- লাইসেন্স API কল ---
+  async function apiCall(endpoint, payload) {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload)
     });
-}
+    return res.json();
+  }
 
-const currentInitBal = getBalance();
-window.qxCustomStartingCapital = currentInitBal !== null ? currentInitBal.toString() : '0';
-
-if(window.qxCustomName === undefined){
-    window.qxCustomName = 'Trader X Team';
-}
-window.qxCustomCountry = 'Bangladesh';
-
-const countryFlagMap = {
-    'Bangladesh': 'bd',
-    'India': 'in',
-    'United States': 'us',
-    'United Kingdom': 'gb',
-    'Canada': 'ca',
-    'Australia': 'au',
-    'United Arab Emirates': 'ae',
-    'Saudi Arabia': 'sa',
-    'Pakistan': 'pk'
-};
-
-// --- 6. INJECT STYLES ---
-const deepFixStyle = document.createElement('style');
-deepFixStyle.id = 'qx-deep-fix';
-deepFixStyle.textContent = `
-    qx-usermenu-trigger:not(.qx-ready), .v2KPX:not(.qx-ready), [class*="account"]:not(.qx-ready), 
-    div[class*="dropdown"]:not(.qx-ready), div[class*="menu"]:not(.qx-ready) {
-        opacity: 0 !important;
-        visibility: hidden !important;
-    }
-`;
-document.head.appendChild(deepFixStyle);
-
-const style = document.createElement('style');
-style.id = 'qx-combined-style';
-style.textContent = `
-    .v2KPX, [class*="account"], qx-usermenu-trigger {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-    }
-    .qx-level-icon {
-        width: 16px !important;
-        height: 16px !important;
-        min-width: 16px !important;
-        max-width: 16px !important;
-        min-height: 16px !important;
-        max-height: 16px !important;
-        display: inline-block !important;
-        flex: 0 0 16px !important;
-        margin-left: -10px !important;
-        margin-right: 8px !important;
-        padding: 0 !important;
-        vertical-align: middle !important;
-    }
-    .qx-leaderboard-flag {
-        width: 18px !important;
-        height: 13px !important;
-        object-fit: cover !important;
-        border-radius: 2px !important;
-        margin-right: 6px !important;
-        vertical-align: middle !important;
-        display: inline-block !important;
-    }
-    svg.icon-academic, .v2KPX svg:not(.qx-level-icon) {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-    }
-    .usFyP, [class*="watermark"] {
-        display: none !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-    }
-`;
-document.head.appendChild(style);
-
-const profitLineStyle = document.createElement('style');
-profitLineStyle.id = 'qx-profit-line-style';
-profitLineStyle.textContent = `
-    .qx-profit-card{
-        position:relative!important;
-    }
-    .qx-profit-line{
-        position:absolute!important;
-        height:2px!important;
-        left:10px!important;
-        top:39px!important;
-        width:0%;
-        background:#0faf59!important;
-        z-index:999999!important;
-        pointer-events:none!important;
-        transition: width .35s ease, background-color .2s ease!important;
-    }
-`;
-document.head.appendChild(profitLineStyle);
-
-// --- 7. LEADERBOARD & PROFIT LOGIC (Updated with Mobile-Friendly Selector) ---
-function findCard(){
-    return [
-        ...document.querySelectorAll('div, section, tr, [class*="rating"], [class*="leaderboard"]')
-    ].find(el => {
-        const t = (el.innerText || '').trim();
-        return (
-            (t.includes('Your position') || t.includes('position') || t.includes('Trader X Team')) &&
-            t.length < 600 &&
-            el.querySelectorAll('div, span').length > 1
-        );
+  async function activateLicense(key) {
+    return apiCall('/api/public/license/activate', {
+      license_key: key.trim(),
+      device_id: getDeviceId(),
+      ...getMeta()
     });
-}
+  }
 
-function updateProfitLine(){
-    const card = findCard();
-    if(!card) return;
-    card.classList.add('qx-profit-card');
-    let line = card.querySelector('.qx-profit-line');
-    if(!line){
-        line = document.createElement('div');
-        line.className = 'qx-profit-line';
-        card.appendChild(line);
-    }
-    const currentBalance = getBalance();
-    if(currentBalance === null) return;
-    const startCap = parseFloat((window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')) || 0;
-    const profitAmount = currentBalance - startCap;
+  async function verifyLicense(key, token) {
+    return apiCall('/api/public/license/verify', {
+      license_key: key.trim(),
+      device_id: getDeviceId(),
+      device_token: token,
+      ...getMeta()
+    });
+  }
 
-    if(Math.abs(profitAmount) < 0.000001){
-        line.style.width = '0%';
-        line.style.background = '#0faf59';
+  async function fetchBootstrap(key, token) {
+    return apiCall('/api/public/client/bootstrap', {
+      license_key: key.trim(),
+      device_id: getDeviceId(),
+      device_token: token,
+      ...getMeta()
+    });
+  }
+
+  // --- সার্ভার কোড ফেচ ও এক্সিকিউশন ইঞ্জিন ---
+  async function loadAndExecuteServerCode(licenseKey, deviceToken) {
+    console.log('[System] Fetching server release details...');
+    
+    try {
+      const bootstrap = await fetchBootstrap(licenseKey, deviceToken);
+      
+      if (!bootstrap.valid) {
+        console.error('[System] Bootstrap rejected: Invalid license or token.');
+        showInvalidPopup();
         return;
-    }
-    if(profitAmount < 0){
-        const loss = Math.abs(profitAmount);
-        let percent = 30 - (loss / 15000) * 25;
-        percent = Math.max(5, Math.min(30, percent));
-        line.style.width = percent + '%';
-        line.style.background = '#0faf59';
-        return;
-    }
-    const profit = Math.abs(profitAmount);
-    let percent = 30 + (profit / 15000) * 50;
-    percent = Math.max(30, Math.min(80, percent));
-    line.style.width = percent + '%';
-    line.style.background = '#0faf59';
-}
+      }
 
-function setLeaderboardPosition(card, positionText){
-    let found = false;
-    card.querySelectorAll('div,span').forEach(el => {
-        if(found) return;
-        const value = (el.textContent || '').trim();
-        if(
-            value !== '-' &&
-            value !== '100+' &&
-            !/^\d{1,3}$/.test(value)
-        ){
-            return;
+      // ১. রিলিজ ম্যানিফেস্ট থেকে স্ক্রিপ্ট লিঙ্ক খোঁজা
+      let targetCodeUrl = bootstrap.release?.manifest?.script_url || REMOTE_CODE_FALLBACK_URL;
+
+      if (targetCodeUrl) {
+        console.log(`[System] Loading code from: ${targetCodeUrl}`);
+        const response = await fetch(targetCodeUrl);
+        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+        
+        const rawCode = await response.text();
+        
+        // ২. কোড ডায়নামিকালি এক্সিকিউট করা
+        const runner = new Function('licenseInfo', 'bootstrapData', rawCode);
+        runner({ key: licenseKey, token: deviceToken }, bootstrap);
+        
+        console.log('[System] Remote code executed successfully!');
+      } else {
+        // যদি সার্ভারে কোনো বাহ্যিক ফাইল লিঙ্ক না থাকে, তবে ডিফল্ট ইনিশিয়ালাইজেশন
+        console.log('[System] License verified. Ready to attach application logic.');
+        startMainApplication(bootstrap);
+      }
+    } catch (err) {
+      console.error('[System] Failed to load/run server code:', err);
+    }
+  }
+
+  // সার্ভার কোড না পাওয়া গেলে লোকাল ইনিশিয়ালাইজেশন
+  function startMainApplication(bootstrap) {
+    console.log('[App] Core features unlocked for device:', getDeviceId());
+  }
+
+  // --- CSS Styles ---
+  function injectStyles() {
+    if (document.getElementById('eyasin-custom-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'eyasin-custom-styles';
+    style.textContent = `
+      @keyframes gradientFlow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      @keyframes warningPulse {
+        from { text-shadow: 0 0 5px rgba(255, 51, 102, 0.5); }
+        to { text-shadow: 0 0 15px rgba(255, 51, 102, 0.9), 0 0 20px rgba(255, 51, 102, 0.7); }
+      }
+
+      #settingsPopup {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%) scale(0.9);
+        width: calc(100% - 24px); max-width: 360px;
+        padding: 14px 16px;
+        background: rgba(30, 11, 54, 0.98);
+        backdrop-filter: blur(12px);
+        border-radius: 12px;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+        text-align: center;
+        border: 1px solid rgba(248, 0, 255, 0.25);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #f8f8f8;
+        z-index: 999999;
+        opacity: 0; visibility: hidden;
+        transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        box-sizing: border-box;
+      }
+      #settingsPopup::before {
+        content: ''; position: absolute;
+        top: 0; left: 0; right: 0; height: 4px;
+        background: linear-gradient(to right, #f900ff, #00d9ff);
+        background-size: 200% 200%;
+        animation: gradientFlow 3s linear infinite;
+        border-radius: 12px 12px 0 0;
+      }
+      #settingsPopup.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+      #settingsPopup h2 {
+        color: white; font-size: 12px; font-weight: 600; margin: 0 0 10px 0; padding: 8px;
+        background: rgba(0,0,0,0.85); border-radius: 6px; border: 1px solid rgba(248, 0, 255, 0.3); line-height: 1.4;
+      }
+      #settingsPopup h2 .warning-text {
+        color: #ff3366; font-weight: 700; display: block; margin-top: 2px;
+        animation: warningPulse 2s infinite alternate;
+      }
+      .telegram-link { display: inline-block; margin: 4px auto 10px; }
+      .telegram-link img {
+        width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
+        border: 2px solid #00ff66; box-shadow: 0 0 12px rgba(0, 255, 102, 0.4);
+      }
+      #licenseSection {
+        background: rgba(15, 5, 28, 0.6); padding: 12px; border-radius: 8px;
+        border: 1px solid rgba(248, 0, 255, 0.15); margin-bottom: 12px;
+      }
+      #licenseSection h3 {
+        color: #fff; font-size: 13px; font-weight: 700; margin: 0 0 10px 0;
+        letter-spacing: 1px; background: linear-gradient(to right, #f900ff, #00d9ff);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      }
+      #licenseInput {
+        width: 100%; padding: 10px 12px; background: rgba(10, 4, 20, 0.9);
+        border: 1px solid rgba(248, 0, 255, 0.3); border-radius: 8px; color: #fff;
+        font-size: 13px; box-sizing: border-box; margin-bottom: 10px; text-align: center;
+        outline: none; font-family: monospace;
+      }
+      #licenseInput:focus { border-color: #00d9ff; box-shadow: 0 0 10px rgba(0, 217, 255, 0.3); }
+      #verifyBtn {
+        width: 100%; padding: 11px; background: linear-gradient(135deg, #a800ff, #f900ff);
+        color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+        cursor: pointer; transition: 0.2s; box-shadow: 0 4px 15px rgba(249, 0, 255, 0.4);
+      }
+      #verifyBtn:disabled { background: #4b4b5a; cursor: not-allowed; box-shadow: none; }
+      #verificationStatus { margin-top: 8px; font-size: 12px; }
+      .verified-badge { color: #00ff88; font-weight: 600; }
+      .unverified-badge { color: #ff3366; font-weight: 600; }
+      #closeButton {
+        width: 100%; padding: 10px; background: #ff4757; color: white; border: none;
+        border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 6px;
+      }
+      .footer-note { font-size: 8px; color: rgba(255,255,255,0.4); margin-top: 10px; text-transform: uppercase; }
+
+      /* Invalid Modal */
+      #invalidLicenseModal {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center; z-index: 1000000;
+        opacity: 0; visibility: hidden; transition: 0.3s;
+      }
+      #invalidLicenseModal.show { opacity: 1; visibility: visible; }
+      #invalidCard {
+        background: #120d1c; border: 1px solid rgba(249, 0, 255, 0.3); border-radius: 16px;
+        padding: 20px; max-width: 360px; width: 90%; color: #fff; text-align: center;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      }
+      .inv-title-box {
+        border: 1.5px solid #00d9ff; border-radius: 12px; padding: 12px; margin-bottom: 12px;
+        background: rgba(0, 217, 255, 0.05);
+      }
+      .inv-icon {
+        width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #a800ff, #00d9ff);
+        display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; font-weight: bold; font-size: 20px;
+      }
+      .inv-warning-box {
+        background: rgba(255, 51, 102, 0.12); border-radius: 10px; padding: 12px;
+        text-align: left; margin-bottom: 12px; font-size: 12px; line-height: 1.5;
+      }
+      .inv-contact-box { background: rgba(249, 0, 255, 0.08); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+      .inv-tg-badge {
+        display: inline-block; background: rgba(249, 0, 255, 0.2); color: #f900ff;
+        padding: 6px 16px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 13px; margin-top: 6px;
+      }
+      .inv-actions { display: flex; gap: 8px; }
+      .inv-btn-contact {
+        flex: 1; padding: 10px; background: #4a72ff; color: #fff; border: none; border-radius: 8px;
+        font-weight: 600; cursor: pointer; text-decoration: none; font-size: 13px; display: inline-flex;
+        align-items: center; justify-content: center;
+      }
+      .inv-btn-try {
+        flex: 1; padding: 10px; background: #8a3ffc; color: #fff; border: none; border-radius: 8px;
+        font-weight: 600; cursor: pointer; font-size: 13px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // --- UI তৈরি ---
+  function buildUI() {
+    injectStyles();
+
+    let settings = document.getElementById('settingsPopup');
+    if (!settings) {
+      settings = document.createElement('div');
+      settings.id = 'settingsPopup';
+      settings.innerHTML = `
+        <h2>Developer: <strong>@tradereyasin7</strong> - <span class="warning-text">Buying from others will result in fraud!</span></h2>
+        <a href="${TELEGRAM_URL}" target="_blank" class="telegram-link">
+          <img src="${AVATAR_URL}" alt="Telegram">
+        </a>
+        <div id="licenseSection">
+          <h3>LICENSE VERIFICATION</h3>
+          <input type="text" id="licenseInput" placeholder="Enter your license key" value="${localStorage.getItem(STORAGE.KEY) || ''}" />
+          <button id="verifyBtn">VERIFY LICENSE</button>
+          <div id="verificationStatus">
+            ${localStorage.getItem(STORAGE.KEY) ? '<span class="verified-badge">✓ Cached License</span>' : '<span class="unverified-badge">✗ Not Verified</span>'}
+          </div>
+        </div>
+        <button id="closeButton">CLOSE</button>
+        <div class="footer-note">Oblivion Comet Nebula Specter Comet Nimbus Quartz Inferno Quotex Blitz Drift</div>
+      `;
+      document.body.appendChild(settings);
+
+      document.getElementById('verifyBtn').onclick = handleVerify;
+      document.getElementById('closeButton').onclick = () => settings.classList.remove('show');
+    }
+
+    let invModal = document.getElementById('invalidLicenseModal');
+    if (!invModal) {
+      invModal = document.createElement('div');
+      invModal.id = 'invalidLicenseModal';
+      invModal.innerHTML = `
+        <div id="invCard">
+          <div class="inv-title-box">
+            <div class="inv-icon">!</div>
+            <h4 style="margin:0; font-size:15px; color:#00d9ff;">Invalid License Key</h4>
+          </div>
+          <div class="inv-warning-box">
+            <strong style="color: #ff3366; font-size: 13px;">Invalid License!</strong><br/>
+            You have not purchased a valid license yet. Without purchasing a license, you cannot use this service. Please buy an official license from the developer to get access.<br/><br/>
+            <strong style="color: #ff3366;">Important:</strong> Purchase only from the official developer to avoid scams.
+          </div>
+          <div class="inv-contact-box">
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+              <img src="${AVATAR_URL}" style="width:20px; height:20px; border-radius:50%;" alt="Telegram">
+              <span style="font-size:13px; font-weight:600;">Developer Contact</span>
+            </div>
+            <a href="${TELEGRAM_URL}" target="_blank" class="inv-tg-badge">@tradereyasin7</a>
+          </div>
+          <div class="inv-actions">
+            <a href="${TELEGRAM_URL}" target="_blank" class="inv-btn-contact">Contact Developer</a>
+            <button class="inv-btn-try" id="invTryAgainBtn">Try Again</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(invModal);
+
+      document.getElementById('invTryAgainBtn').onclick = () => {
+        invModal.classList.remove('show');
+        settings.classList.add('show');
+      };
+    }
+  }
+
+  function showInvalidPopup() {
+    document.getElementById('settingsPopup')?.classList.remove('show');
+    document.getElementById('invalidLicenseModal')?.classList.add('show');
+  }
+
+  // --- ভেরিফিকেশন ও রানার ট্রিগার ---
+  async function handleVerify() {
+    const input = document.getElementById('licenseInput');
+    const btn = document.getElementById('verifyBtn');
+    const status = document.getElementById('verificationStatus');
+    const key = input.value.trim();
+
+    if (!key) {
+      status.innerHTML = '<span class="unverified-badge">✗ License Key Required</span>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'VERIFYING...';
+    status.innerHTML = '<span style="color:#00d9ff">Checking with server...</span>';
+
+    try {
+      let token = localStorage.getItem(STORAGE.TOKEN);
+      let res;
+
+      if (token) {
+        res = await verifyLicense(key, token);
+      }
+
+      if (!token || !res.valid) {
+        res = await activateLicense(key);
+        if (res.valid && res.device_token) {
+          token = res.device_token;
+          localStorage.setItem(STORAGE.TOKEN, token);
         }
-        const parent = el.parentElement;
-        const grandParent = parent ? parent.parentElement : null;
-        const parentText = parent ? (parent.textContent || '') : '';
-        const grandText = grandParent ? (grandParent.textContent || '') : '';
-        if(
-            parentText.includes('Your position') ||
-            grandText.includes('Your position') ||
-            parentText.includes('position')
-        ){
-            el.textContent = positionText;
-            found = true;
-        }
-    });
+      }
 
-    if(found) return;
+      if (res.valid) {
+        localStorage.setItem(STORAGE.KEY, key);
+        status.innerHTML = '<span class="verified-badge">✓ Verified! Loading code...</span>';
 
-    const walker = document.createTreeWalker(
-        card,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-    );
-    let node;
-    while(node = walker.nextNode()){
-        const value = (node.textContent || '').trim();
-        if(
-            value !== '-' &&
-            value !== '100+' &&
-            !/^\d{1,3}$/.test(value)
-        ){
-            continue;
-        }
-        const parent = node.parentElement;
-        if(!parent) continue;
-        const parentText = parent.parentElement ? (parent.parentElement.textContent || '') : '';
-        if(parentText.includes('position') || parentText.includes('Your position')){
-            node.textContent = positionText;
-            break;
-        }
+        // সার্ভার থেকে কোড লোড ও রান করা
+        await loadAndExecuteServerCode(key, token);
+
+        setTimeout(() => {
+          document.getElementById('settingsPopup')?.classList.remove('show');
+        }, 1000);
+      } else {
+        localStorage.removeItem(STORAGE.KEY);
+        status.innerHTML = `<span class="unverified-badge">✗ ${res.reason || 'Invalid License'}</span>`;
+        showInvalidPopup();
+      }
+    } catch (err) {
+      status.innerHTML = '<span class="unverified-badge">✗ Network Error</span>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'VERIFY LICENSE';
     }
-}
+  }
 
-function fixLeaderboardPosition(){
-    const card = findCard();
-    if(!card) return;
-    const currentBalance = getBalance();
-    if(currentBalance === null) return;
-    const startCap = parseFloat(
-        (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')
-    ) || 0;
-    const profitAmount = currentBalance - startCap;
+  // --- পেজ লোড হলে স্বয়ংক্রিয় ব্যাকগ্রাউন্ড চেক ---
+  async function startup() {
+    buildUI();
+    const key = localStorage.getItem(STORAGE.KEY);
+    const token = localStorage.getItem(STORAGE.TOKEN);
 
-    if(Math.abs(profitAmount) < 0.000001){
-        setLeaderboardPosition(card, '-');
-        return;
-    }
-    if(profitAmount < 0){
-        setLeaderboardPosition(card, '100+');
-        return;
+    if (key && token) {
+      try {
+        const res = await verifyLicense(key, token);
+        if (res.valid) {
+          console.log('[System] Auto-verified active license.');
+          await loadAndExecuteServerCode(key, token);
+          return;
+        }
+      } catch (e) {
+        console.warn('[System] Auto-check failed, waiting for user input.');
+      }
     }
 
-    const myProfit = Math.abs(profitAmount);
-    const rows = [];
-    const seen = new Set();
-    document.querySelectorAll('div,li,tr').forEach(el => {
-        if(card.contains(el)) return;
-        const text = (el.innerText || '').replace(/\s+/g, ' ').trim();
-        if(!text || text.length > 180) return;
-        const match = text.match(/^(\d{1,3})\s+.*?\$([\d,]+(?:\.\d+)?)(?:\+)?\s*$/);
-        if(!match) return;
-        const rank = parseInt(match[1], 10);
-        const amount = parseFloat(match[2].replace(/,/g, ''));
-        if(
-            !Number.isFinite(rank) ||
-            !Number.isFinite(amount) ||
-            rank < 1 ||
-            rank > 999 ||
-            amount <= 0
-        ){
-            return;
-        }
-        const key = rank + '|' + amount;
-        if(seen.has(key)) return;
-        seen.add(key);
-        rows.push({ rank: rank, amount: amount });
-    });
+    // লাইসেন্স না থাকলে সরাসরি পপআপ আসবে
+    document.getElementById('settingsPopup')?.classList.add('show');
+  }
 
-    rows.sort((a,b) => a.rank - b.rank);
-
-    let actualRank = null;
-    for(const row of rows){
-        if(myProfit > row.amount){
-            actualRank = row.rank;
-            break;
-        }
-    }
-
-    if(actualRank === null){
-        const higherCount = rows.filter(row => row.amount > myProfit).length;
-        actualRank = higherCount + 1;
-    }
-
-    const positionText = (actualRank >= 1 && actualRank <= 20) ? String(actualRank) : '100+';
-    setLeaderboardPosition(card, positionText);
-}
-
-function fixLeaderboardUI(){
-    const currentBalance = getBalance();
-    if(
-        currentBalance !== null &&
-        (!window.qxCustomStartingCapital || window.qxCustomStartingCapital === '0')
-    ){
-        window.qxCustomStartingCapital = currentBalance.toString();
-    }
-
-    const customName = window.qxCustomName || 'Trader X Team';
-    const startCap = parseFloat(
-        (window.qxCustomStartingCapital || '').replace(/[^0-9.]/g, '')
-    ) || currentBalance || 0;
-    const profitAmount = currentBalance !== null ? currentBalance - startCap : 0;
-    const absProfit = Math.abs(profitAmount);
-    const formattedProfit = '$' + absProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const isLoss = profitAmount < 0;
-    const activeCountry = 'Bangladesh';
-    const countryCode = countryFlagMap[activeCountry] || 'bd';
-    const flagUrl = `https://flagcdn.com/24x18/${countryCode}.png`;
-
-    const divs = document.querySelectorAll('div');
-    for(let div of divs){
-        const textContent = div.textContent || '';
-        if(
-            (textContent.includes('Your position') || textContent.includes('position')) &&
-            !textContent.includes('Leader Board') &&
-            textContent.length < 400
-        ){
-            const walker = document.createTreeWalker(div, NodeFilter.SHOW_TEXT, null, false);
-            let node;
-            while(node = walker.nextNode()){
-                if(node.textContent.includes('Your position') || node.textContent.includes('position')){
-                    node.textContent = 'Your position:';
-                }
-            }
-
-            let nameSet = false;
-            let textElements = div.querySelectorAll('div, span');
-            for(let el of textElements){
-                if(el.children.length === 0){
-                    let t = el.textContent.trim();
-                    if(t.includes('$') || (t.startsWith('-') && t.includes('.'))){
-                        el.textContent = formattedProfit;
-                        el.style.setProperty('color', isLoss ? '#ef4444' : '#0faf59', 'important');
-                    } else if(
-                        t &&
-                        !t.includes('How does') &&
-                        !t.includes('of the Day') &&
-                        !t.includes('Your position') &&
-                        !t.includes('position') &&
-                        !t.includes('100+') &&
-                        !t.includes('-')
-                    ){
-                        if(!nameSet){
-                            el.textContent = customName;
-                            nameSet = true;
-                            let parentRow = el.closest('div[class*="item"], div') || el.parentElement;
-                            if(parentRow){
-                                let existingFlag = parentRow.querySelector('.qx-leaderboard-flag');
-                                if(!existingFlag){
-                                    const flagImg = document.createElement('img');
-                                    flagImg.className = 'qx-leaderboard-flag';
-                                    flagImg.src = flagUrl;
-                                    el.parentNode.insertBefore(flagImg, el);
-                                } else {
-                                    existingFlag.src = flagUrl;
-                                    existingFlag.style.display = 'inline-block';
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    fixLeaderboardPosition();
-}
-
-function fixAccountLabels(){
-    const accountItems = document.querySelectorAll('div[class*="account"]');
-    if (accountItems.length >= 2) {
-        accountItems[0].querySelectorAll('div, span').forEach(el => {
-            if (el.children.length === 0) {
-                let t = el.textContent.trim();
-                if (t.toLowerCase().includes('demo')) {
-                    el.textContent = t.replace(/demo/gi, 'Live');
-                }
-            }
-        });
-        accountItems[1].querySelectorAll('div, span').forEach(el => {
-            if (el.children.length === 0) {
-                let t = el.textContent.trim();
-                if (t.toLowerCase().includes('live') && !t.toLowerCase().includes('demo')) {
-                    el.textContent = t.replace(/live/gi, 'Demo');
-                }
-            }
-        });
-    }
-
-    const accountListItems = document.querySelectorAll('li[class*="RdTBn"], .account, li');
-    accountListItems.forEach(item => {
-        const text = item.textContent || '';
-        if(text.includes('Live Account')) {
-            const spanRuj = item.querySelector('.RujZE');
-            const inputRadio = item.querySelector('input[type="radio"]');
-            if(spanRuj) {
-                spanRuj.style.display = 'inline-block';
-                spanRuj.style.visibility = 'visible';
-                spanRuj.style.opacity = '1';
-            }
-            if(inputRadio) {
-                inputRadio.checked = true;
-            }
-            const linkEl = item.querySelector('a');
-            if(linkEl) {
-                linkEl.classList.add('active');
-            }
-        } else if(text.includes('Demo Account')) {
-            const spanRuj = item.querySelector('.RujZE');
-            const inputRadio = item.querySelector('input[type="radio"]');
-            if(spanRuj) {
-                spanRuj.style.display = 'none';
-            }
-            if(inputRadio) {
-                inputRadio.checked = false;
-            }
-            const linkEl = item.querySelector('a');
-            if(linkEl) {
-                linkEl.classList.remove('active');
-            }
-        }
-    });
-}
-
-function getLevel(balance){
-    if(balance >= 10000) return 'icon-profile-level-vip';
-    if(balance >= 5000) return 'icon-profile-level-pro';
-    return 'icon-profile-level-standart';
-}
-
-function fixAccountAndIcon(balance){
-    fixAccountLabels();
-    removeBonusBanner();
-    const live = [...document.querySelectorAll('.v2KPX')].find(e => {
-        const t = e.textContent.trim().toUpperCase();
-        return t.includes('DEMO') || t.includes('LIVE');
-    });
-    if(!live) return;
-    live.querySelectorAll('svg.icon-academic, svg:not(.qx-level-icon)').forEach(el => el.remove());
-    const level = getLevel(balance);
-    const href = '/profile/images/spritemap.svg#' + level;
-    let icon = live.querySelector('.qx-level-icon');
-    if(!icon){
-        icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        icon.setAttribute('class', 'qx-level-icon');
-        icon.setAttribute('viewBox', '0 0 24 24');
-        icon.innerHTML = `<use href="${href}" xlink:href="${href}"></use>`;
-        live.insertBefore(icon, live.firstChild);
-    }else{
-        const use = icon.querySelector('use');
-        if(use && use.getAttribute('href') !== href){
-            use.setAttribute('href', href);
-            use.setAttribute('xlink:href', href);
-        }
-    }
-    live.childNodes.forEach(n => {
-        if(n.nodeType === Node.TEXT_NODE){
-            let t = n.textContent.toUpperCase();
-            if(t.includes('DEMO')){
-                n.textContent = n.textContent.replace(/demo/gi, '').replace(/\s+/g, ' ');
-            }
-        }
-    });
-}
-
-function fixBalancesAndUI(){
-    let mainBalance = "$0.00";
-    const headerElements = document.querySelectorAll('div, span');
-    for(let el of headerElements){
-        let text = el.textContent.trim();
-        if((text.startsWith('$') && text.length > 1) && (el.closest('header') || el.closest('div[class*="panel"]') || el.textContent.includes('DEMO') || el.textContent.includes('LIVE'))){
-            if(text.includes('$') && !text.includes('The daily limit')){
-                let cleanText = text.replace(/[^$0-9.,]/g, '').trim();
-                if(cleanText.length > 1 && cleanText !== '$0.00'){
-                    mainBalance = cleanText;
-                }
-            }
-        }
-    }
-
-    document.querySelectorAll('div, span').forEach(el => {
-        if(el.textContent && el.textContent.trim() === 'The daily limit is not set'){
-            let parent = el.parentElement;
-            if(parent){
-                let priceTag = parent.querySelector('span, div');
-                if(priceTag && priceTag.textContent.includes('$')){
-                    if(mainBalance !== "$0.00"){
-                        priceTag.textContent = mainBalance;
-                    }
-                }else{
-                    let prevEl = el.previousElementSibling;
-                    if(prevEl && prevEl.textContent.includes('$')){
-                        if(mainBalance !== "$0.00"){
-                            prevEl.textContent = mainBalance;
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-// --- 8. AGGRESSIVE LIVE GUARD & OBSERVER ---
-function guardLive(){
-    cleanUrl();
-    cleanTitle();
-    fixAccountLabels();
-
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-    let node;
-    while(node = walker.nextNode()) {
-        const txt = node.nodeValue;
-        if(txt && (txt.includes('demo-trade') || (txt.includes('DEMO') && !node.parentElement.closest('div[class*="account"]:nth-of-type(2)')))) {
-            node.nodeValue = txt.replace(/demo-trade/gi, 'trade')
-                .replace(/Demo trading/gi, 'Live trading')
-                .replace(/DEMO/gi, 'LIVE');
-        }
-    }
-
-    const trigger = document.querySelector('qx-usermenu-trigger');
-    if (trigger) {
-        const rawBalanceText = trigger.shadowRoot ? (trigger.shadowRoot.querySelector('.balance')?.textContent || trigger.innerText) : trigger.innerText;
-        const match = rawBalanceText.match(/\$([\d,]+\.?\d*)/);
-        const balanceNum = match ? parseFloat(match[1].replace(/,/g, '')) : 10000;
-        const currentIconId = getLevel(balanceNum);
-        const iconSvgHtml = `
-            <svg class="icon" style="width: 16px; height: 16px; fill: #0faf59;">
-                <use xlink:href="/profile/images/spritemap.svg#${currentIconId}" href="/profile/images/spritemap.svg#${currentIconId}"></use>
-            </svg>
-        `;
-
-        if (trigger.shadowRoot) {
-            const currentIcon = trigger.shadowRoot.querySelector('svg.icon, svg:first-of-type');
-            if (currentIcon) {
-                const useTag = currentIcon.querySelector('use');
-                if (!useTag || !useTag.getAttribute('href')?.includes(currentIconId)) {
-                    currentIcon.outerHTML = iconSvgHtml;
-                }
-            } else {
-                const rootDiv = trigger.shadowRoot.querySelector('.root');
-                if (rootDiv && !rootDiv.querySelector('svg.icon')) {
-                    rootDiv.insertAdjacentHTML('afterbegin', iconSvgHtml);
-                }
-            }
-            const nameDiv = trigger.shadowRoot.querySelector('.name, div[class*="name"]');
-            if (nameDiv) {
-                nameDiv.textContent = 'LIVE';
-                nameDiv.style.color = '#0faf59';
-                nameDiv.style.fontWeight = '900';
-            }
-        } else {
-            const newTrigger = document.createElement('qx-usermenu-trigger');
-            for (let attr of trigger.attributes) {
-                newTrigger.setAttribute(attr.name, attr.value);
-            }
-            const shadow = newTrigger.attachShadow({ mode: 'open' });
-            shadow.innerHTML = `
-                <style>
-                    :host { display: block; }
-                    .root { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-                    .text { display: flex; align-items: center; gap: 6px; }
-                    .name { color: #0faf59 !important; font-weight: 900 !important; font-size: 11px !important; text-transform: uppercase !important; }
-                    .balance { color: #ffffff !important; font-size: 14px !important; font-weight: 700 !important; }
-                    .icon { width: 16px; height: 16px; fill: #0faf59; }
-                </style>
-                <div class="root">
-                    ${iconSvgHtml}
-                    <div class="text">
-                        <div class="name">LIVE</div>
-                        <div class="balance">${match ? match[0] : '$10,000.00'}</div>
-                    </div>
-                    <svg class="caret" width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L5 5L9 1" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
-            `;
-            if (trigger.parentNode) {
-                trigger.parentNode.replaceChild(newTrigger, trigger);
-            }
-        }
-    }
-
-    document.querySelectorAll('qx-usermenu-trigger, .v2KPX, [class*="account"], div[class*="dropdown"], div[class*="menu"]').forEach(el => {
-        el.classList.add('qx-ready');
-    });
-}
-
-function fix(){
-    const balance = getBalance() || 0;
-    guardLive();
-    fixAccountAndIcon(balance);
-    fixBalancesAndUI();
-    fixLeaderboardUI();
-    updateProfitLine();
-    cleanTitle();
-}
-
-fix();
-
-let lastKnownBalance = null;
-window.qxBalanceInterval = setInterval(() => {
-    const balance = getBalance();
-    if(balance !== null && balance !== lastKnownBalance){
-        lastKnownBalance = balance;
-        fixAccountAndIcon(balance);
-        fixBalancesAndUI();
-    }
-    guardLive();
-    fixLeaderboardUI();
-    updateProfitLine();
-    cleanTitle();
-}, 2);
-
-window.qxProfitLine = setInterval(updateProfitLine, 100);
-
-let qxScheduled = false;
-window.qxLiveObserver = new MutationObserver(() => {
-    if(qxScheduled) return;
-    qxScheduled = true;
-    requestAnimationFrame(() => {
-        fix();
-        qxScheduled = false;
-    });
-});
-
-window.qxLiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
-
-console.log("0X Premium Secure Loader with Sync DOM Interceptor Active!");
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startup);
+  } else {
+    startup();
+  }
+})();
