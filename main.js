@@ -1,410 +1,199 @@
 // ==UserScript==
-// @name         License Client & Server Code Runner
-// @namespace    https://demotoliveadmin.lovable.app
-// @version      3.5.0
-// @description  Verifies license and executes remote server code dynamically
-// @match        *://*/*
-// @grant        none
+// @name         DemoToLiveAdmin Licensed Client
+// @namespace    https://demotoliveadmin.lovable.app/
+// @version      1.0.0
+// @description  Verifies a license and loads a published client script from your license server.
+// @match        https://YOUR-OWN-APP.example/*
+// @run-at       document-idle
+// @grant        GM_xmlhttpRequest
+// @connect      demotoliveadmin.lovable.app
 // ==/UserScript==
 
-(function () {
+(() => {
   'use strict';
 
-  // --- কনফিগারেশন ---
-  const API_BASE = 'https://demotoliveadmin.lovable.app';
-  const TELEGRAM_URL = 'https://t.me/tradereyasin7';
-  const AVATAR_URL = 'https://i.postimg.cc/W1xNxw0S/file-00000000acd08230b081904c2c4ce41c.png';
+  const API = 'https://demotoliveadmin.lovable.app';
+  const KEY_STORE = 'dtla_license_key';
+  const DEVICE_STORE = 'dtla_device_id';
+  const TOKEN_STORE = 'dtla_device_token';
+  const GLOBAL_LOCK = '__dtla_licensed_loader_started__';
 
-  // আপনি যদি কোনো আলাদা CDN বা সার্ভারে কোড রাখেন তবে এখানে URL দিতে পারেন
-  const REMOTE_CODE_FALLBACK_URL = ''; 
+  if (window[GLOBAL_LOCK]) return;
+  window[GLOBAL_LOCK] = true;
 
-  const STORAGE = {
-    KEY: 'appActivation',
-    TOKEN: 'appDeviceToken',
-    DEVICE_ID: 'appDeviceId'
+  const storage = {
+    get(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch {} },
+    remove(key) { try { localStorage.removeItem(key); } catch {} },
   };
 
-  function getDeviceId() {
-    let id = localStorage.getItem(STORAGE.DEVICE_ID);
+  function deviceId() {
+    let id = storage.get(DEVICE_STORE);
     if (!id) {
-      id = 'dev_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
-      localStorage.setItem(STORAGE.DEVICE_ID, id);
+      id = (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}-${Math.random()}`)
+        .replace(/[^a-zA-Z0-9-]/g, '');
+      storage.set(DEVICE_STORE, id);
     }
     return id;
   }
 
-  function getMeta() {
-    const ua = navigator.userAgent;
-    return {
-      browser: /Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : 'Other',
-      os: /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'macOS' : 'Other',
-      device_type: /Mobile|Android/.test(ua) ? 'mobile' : 'desktop'
-    };
-  }
-
-  // --- লাইসেন্স API কল ---
-  async function apiCall(endpoint, payload) {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    return res.json();
-  }
-
-  async function activateLicense(key) {
-    return apiCall('/api/public/license/activate', {
-      license_key: key.trim(),
-      device_id: getDeviceId(),
-      ...getMeta()
-    });
-  }
-
-  async function verifyLicense(key, token) {
-    return apiCall('/api/public/license/verify', {
-      license_key: key.trim(),
-      device_id: getDeviceId(),
-      device_token: token,
-      ...getMeta()
-    });
-  }
-
-  async function fetchBootstrap(key, token) {
-    return apiCall('/api/public/client/bootstrap', {
-      license_key: key.trim(),
-      device_id: getDeviceId(),
-      device_token: token,
-      ...getMeta()
-    });
-  }
-
-  // --- সার্ভার কোড ফেচ ও এক্সিকিউশন ইঞ্জিন ---
-  async function loadAndExecuteServerCode(licenseKey, deviceToken) {
-    console.log('[System] Fetching server release details...');
-    
-    try {
-      const bootstrap = await fetchBootstrap(licenseKey, deviceToken);
-      
-      if (!bootstrap.valid) {
-        console.error('[System] Bootstrap rejected: Invalid license or token.');
-        showInvalidPopup();
+  function request(path, body) {
+    return new Promise((resolve, reject) => {
+      const payload = JSON.stringify(body);
+      if (typeof GM_xmlhttpRequest === 'function') {
+        GM_xmlhttpRequest({
+          method: 'POST', url: API + path,
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          data: payload, timeout: 15000,
+          onload: response => {
+            try { resolve(JSON.parse(response.responseText)); }
+            catch { reject(new Error('The license server returned an unreadable response.')); }
+          },
+          onerror: () => reject(new Error('Could not connect to the license server.')),
+          ontimeout: () => reject(new Error('The license server request timed out.')),
+        });
         return;
       }
-
-      // ১. রিলিজ ম্যানিফেস্ট থেকে স্ক্রিপ্ট লিঙ্ক খোঁজা
-      let targetCodeUrl = bootstrap.release?.manifest?.script_url || REMOTE_CODE_FALLBACK_URL;
-
-      if (targetCodeUrl) {
-        console.log(`[System] Loading code from: ${targetCodeUrl}`);
-        const response = await fetch(targetCodeUrl);
-        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
-        
-        const rawCode = await response.text();
-        
-        // ২. কোড ডায়নামিকালি এক্সিকিউট করা
-        const runner = new Function('licenseInfo', 'bootstrapData', rawCode);
-        runner({ key: licenseKey, token: deviceToken }, bootstrap);
-        
-        console.log('[System] Remote code executed successfully!');
-      } else {
-        // যদি সার্ভারে কোনো বাহ্যিক ফাইল লিঙ্ক না থাকে, তবে ডিফল্ট ইনিশিয়ালাইজেশন
-        console.log('[System] License verified. Ready to attach application logic.');
-        startMainApplication(bootstrap);
-      }
-    } catch (err) {
-      console.error('[System] Failed to load/run server code:', err);
-    }
+      fetch(API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: payload,
+        signal: AbortSignal.timeout(15000),
+      }).then(async response => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok && !result.reason) throw new Error(`Request failed (${response.status}).`);
+        resolve(result);
+      }).catch(reject);
+    });
   }
 
-  // সার্ভার কোড না পাওয়া গেলে লোকাল ইনিশিয়ালাইজেশন
-  function startMainApplication(bootstrap) {
-    console.log('[App] Core features unlocked for device:', getDeviceId());
+  const overlay = document.createElement('div');
+  overlay.id = 'dtla-license-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#08090deF;display:flex;align-items:center;justify-content:center;padding:18px;font:15px/1.45 system-ui,sans-serif;color:#f5f5f7';
+  overlay.innerHTML = `
+    <section style="width:min(420px,100%);background:#171922;border:1px solid #383b49;border-radius:18px;padding:24px;box-shadow:0 20px 80px #0009">
+      <div style="font-size:12px;letter-spacing:.12em;color:#8e91a2;font-weight:700">LICENSED CLIENT</div>
+      <h2 style="margin:8px 0 6px;font-size:23px">Verify your license</h2>
+      <p style="margin:0 0 18px;color:#aeb1bf">Enter your license key to activate this device and load the published client.</p>
+      <input id="dtla-key" autocomplete="off" placeholder="Enter license key" style="box-sizing:border-box;width:100%;padding:13px 14px;background:#0d0f15;border:1px solid #444859;border-radius:10px;color:#fff;font:inherit;outline:none">
+      <div id="dtla-status" role="status" style="min-height:22px;margin:12px 0;color:#f4bc56"></div>
+      <button id="dtla-verify" style="width:100%;padding:13px;border:0;border-radius:10px;background:#42d6a0;color:#07140f;font:700 15px system-ui;cursor:pointer">Verify &amp; Load</button>
+      <button id="dtla-clear" style="display:none;margin:12px auto 0;background:none;border:0;color:#aeb1bf;text-decoration:underline;cursor:pointer">Use another license</button>
+    </section>`;
+  (document.body || document.documentElement).appendChild(overlay);
+
+  const keyInput = overlay.querySelector('#dtla-key');
+  const status = overlay.querySelector('#dtla-status');
+  const verifyButton = overlay.querySelector('#dtla-verify');
+  const clearButton = overlay.querySelector('#dtla-clear');
+  keyInput.value = storage.get(KEY_STORE);
+
+  function message(text, color = '#f4bc56') {
+    status.textContent = text;
+    status.style.color = color;
   }
 
-  // --- CSS Styles ---
-  function injectStyles() {
-    if (document.getElementById('eyasin-custom-styles')) return;
-    const style = document.createElement('style');
-    style.id = 'eyasin-custom-styles';
-    style.textContent = `
-      @keyframes gradientFlow {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-      @keyframes warningPulse {
-        from { text-shadow: 0 0 5px rgba(255, 51, 102, 0.5); }
-        to { text-shadow: 0 0 15px rgba(255, 51, 102, 0.9), 0 0 20px rgba(255, 51, 102, 0.7); }
-      }
-
-      #settingsPopup {
-        position: fixed;
-        top: 50%; left: 50%;
-        transform: translate(-50%, -50%) scale(0.9);
-        width: calc(100% - 24px); max-width: 360px;
-        padding: 14px 16px;
-        background: rgba(30, 11, 54, 0.98);
-        backdrop-filter: blur(12px);
-        border-radius: 12px;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
-        text-align: center;
-        border: 1px solid rgba(248, 0, 255, 0.25);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        color: #f8f8f8;
-        z-index: 999999;
-        opacity: 0; visibility: hidden;
-        transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        box-sizing: border-box;
-      }
-      #settingsPopup::before {
-        content: ''; position: absolute;
-        top: 0; left: 0; right: 0; height: 4px;
-        background: linear-gradient(to right, #f900ff, #00d9ff);
-        background-size: 200% 200%;
-        animation: gradientFlow 3s linear infinite;
-        border-radius: 12px 12px 0 0;
-      }
-      #settingsPopup.show { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
-      #settingsPopup h2 {
-        color: white; font-size: 12px; font-weight: 600; margin: 0 0 10px 0; padding: 8px;
-        background: rgba(0,0,0,0.85); border-radius: 6px; border: 1px solid rgba(248, 0, 255, 0.3); line-height: 1.4;
-      }
-      #settingsPopup h2 .warning-text {
-        color: #ff3366; font-weight: 700; display: block; margin-top: 2px;
-        animation: warningPulse 2s infinite alternate;
-      }
-      .telegram-link { display: inline-block; margin: 4px auto 10px; }
-      .telegram-link img {
-        width: 44px; height: 44px; border-radius: 50%; object-fit: cover;
-        border: 2px solid #00ff66; box-shadow: 0 0 12px rgba(0, 255, 102, 0.4);
-      }
-      #licenseSection {
-        background: rgba(15, 5, 28, 0.6); padding: 12px; border-radius: 8px;
-        border: 1px solid rgba(248, 0, 255, 0.15); margin-bottom: 12px;
-      }
-      #licenseSection h3 {
-        color: #fff; font-size: 13px; font-weight: 700; margin: 0 0 10px 0;
-        letter-spacing: 1px; background: linear-gradient(to right, #f900ff, #00d9ff);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      }
-      #licenseInput {
-        width: 100%; padding: 10px 12px; background: rgba(10, 4, 20, 0.9);
-        border: 1px solid rgba(248, 0, 255, 0.3); border-radius: 8px; color: #fff;
-        font-size: 13px; box-sizing: border-box; margin-bottom: 10px; text-align: center;
-        outline: none; font-family: monospace;
-      }
-      #licenseInput:focus { border-color: #00d9ff; box-shadow: 0 0 10px rgba(0, 217, 255, 0.3); }
-      #verifyBtn {
-        width: 100%; padding: 11px; background: linear-gradient(135deg, #a800ff, #f900ff);
-        color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
-        cursor: pointer; transition: 0.2s; box-shadow: 0 4px 15px rgba(249, 0, 255, 0.4);
-      }
-      #verifyBtn:disabled { background: #4b4b5a; cursor: not-allowed; box-shadow: none; }
-      #verificationStatus { margin-top: 8px; font-size: 12px; }
-      .verified-badge { color: #00ff88; font-weight: 600; }
-      .unverified-badge { color: #ff3366; font-weight: 600; }
-      #closeButton {
-        width: 100%; padding: 10px; background: #ff4757; color: white; border: none;
-        border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 6px;
-      }
-      .footer-note { font-size: 8px; color: rgba(255,255,255,0.4); margin-top: 10px; text-transform: uppercase; }
-
-      /* Invalid Modal */
-      #invalidLicenseModal {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
-        display: flex; align-items: center; justify-content: center; z-index: 1000000;
-        opacity: 0; visibility: hidden; transition: 0.3s;
-      }
-      #invalidLicenseModal.show { opacity: 1; visibility: visible; }
-      #invalidCard {
-        background: #120d1c; border: 1px solid rgba(249, 0, 255, 0.3); border-radius: 16px;
-        padding: 20px; max-width: 360px; width: 90%; color: #fff; text-align: center;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-      }
-      .inv-title-box {
-        border: 1.5px solid #00d9ff; border-radius: 12px; padding: 12px; margin-bottom: 12px;
-        background: rgba(0, 217, 255, 0.05);
-      }
-      .inv-icon {
-        width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #a800ff, #00d9ff);
-        display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; font-weight: bold; font-size: 20px;
-      }
-      .inv-warning-box {
-        background: rgba(255, 51, 102, 0.12); border-radius: 10px; padding: 12px;
-        text-align: left; margin-bottom: 12px; font-size: 12px; line-height: 1.5;
-      }
-      .inv-contact-box { background: rgba(249, 0, 255, 0.08); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-      .inv-tg-badge {
-        display: inline-block; background: rgba(249, 0, 255, 0.2); color: #f900ff;
-        padding: 6px 16px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 13px; margin-top: 6px;
-      }
-      .inv-actions { display: flex; gap: 8px; }
-      .inv-btn-contact {
-        flex: 1; padding: 10px; background: #4a72ff; color: #fff; border: none; border-radius: 8px;
-        font-weight: 600; cursor: pointer; text-decoration: none; font-size: 13px; display: inline-flex;
-        align-items: center; justify-content: center;
-      }
-      .inv-btn-try {
-        flex: 1; padding: 10px; background: #8a3ffc; color: #fff; border: none; border-radius: 8px;
-        font-weight: 600; cursor: pointer; font-size: 13px;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  // --- UI তৈরি ---
-  function buildUI() {
-    injectStyles();
-
-    let settings = document.getElementById('settingsPopup');
-    if (!settings) {
-      settings = document.createElement('div');
-      settings.id = 'settingsPopup';
-      settings.innerHTML = `
-        <h2>Developer: <strong>@tradereyasin7</strong> - <span class="warning-text">Buying from others will result in fraud!</span></h2>
-        <a href="${TELEGRAM_URL}" target="_blank" class="telegram-link">
-          <img src="${AVATAR_URL}" alt="Telegram">
-        </a>
-        <div id="licenseSection">
-          <h3>LICENSE VERIFICATION</h3>
-          <input type="text" id="licenseInput" placeholder="Enter your license key" value="${localStorage.getItem(STORAGE.KEY) || ''}" />
-          <button id="verifyBtn">VERIFY LICENSE</button>
-          <div id="verificationStatus">
-            ${localStorage.getItem(STORAGE.KEY) ? '<span class="verified-badge">✓ Cached License</span>' : '<span class="unverified-badge">✗ Not Verified</span>'}
-          </div>
-        </div>
-        <button id="closeButton">CLOSE</button>
-        <div class="footer-note">Oblivion Comet Nebula Specter Comet Nimbus Quartz Inferno Quotex Blitz Drift</div>
-      `;
-      document.body.appendChild(settings);
-
-      document.getElementById('verifyBtn').onclick = handleVerify;
-      document.getElementById('closeButton').onclick = () => settings.classList.remove('show');
-    }
-
-    let invModal = document.getElementById('invalidLicenseModal');
-    if (!invModal) {
-      invModal = document.createElement('div');
-      invModal.id = 'invalidLicenseModal';
-      invModal.innerHTML = `
-        <div id="invCard">
-          <div class="inv-title-box">
-            <div class="inv-icon">!</div>
-            <h4 style="margin:0; font-size:15px; color:#00d9ff;">Invalid License Key</h4>
-          </div>
-          <div class="inv-warning-box">
-            <strong style="color: #ff3366; font-size: 13px;">Invalid License!</strong><br/>
-            You have not purchased a valid license yet. Without purchasing a license, you cannot use this service. Please buy an official license from the developer to get access.<br/><br/>
-            <strong style="color: #ff3366;">Important:</strong> Purchase only from the official developer to avoid scams.
-          </div>
-          <div class="inv-contact-box">
-            <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
-              <img src="${AVATAR_URL}" style="width:20px; height:20px; border-radius:50%;" alt="Telegram">
-              <span style="font-size:13px; font-weight:600;">Developer Contact</span>
-            </div>
-            <a href="${TELEGRAM_URL}" target="_blank" class="inv-tg-badge">@tradereyasin7</a>
-          </div>
-          <div class="inv-actions">
-            <a href="${TELEGRAM_URL}" target="_blank" class="inv-btn-contact">Contact Developer</a>
-            <button class="inv-btn-try" id="invTryAgainBtn">Try Again</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(invModal);
-
-      document.getElementById('invTryAgainBtn').onclick = () => {
-        invModal.classList.remove('show');
-        settings.classList.add('show');
-      };
-    }
-  }
-
-  function showInvalidPopup() {
-    document.getElementById('settingsPopup')?.classList.remove('show');
-    document.getElementById('invalidLicenseModal')?.classList.add('show');
-  }
-
-  // --- ভেরিফিকেশন ও রানার ট্রিগার ---
-  async function handleVerify() {
-    const input = document.getElementById('licenseInput');
-    const btn = document.getElementById('verifyBtn');
-    const status = document.getElementById('verificationStatus');
-    const key = input.value.trim();
-
-    if (!key) {
-      status.innerHTML = '<span class="unverified-badge">✗ License Key Required</span>';
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'VERIFYING...';
-    status.innerHTML = '<span style="color:#00d9ff">Checking with server...</span>';
+  async function verifyAndLoad() {
+    const key = keyInput.value.trim();
+    if (key.length < 10) return message('Please enter a valid license key.', '#ff7878');
+    verifyButton.disabled = true;
+    verifyButton.textContent = 'Checking license…';
+    message('Verifying this device with the license server…');
 
     try {
-      let token = localStorage.getItem(STORAGE.TOKEN);
-      let res;
+      const id = deviceId();
+      let token = storage.get(TOKEN_STORE);
+      let verdict;
 
       if (token) {
-        res = await verifyLicense(key, token);
+        verdict = await request('/api/public/license/verify', {
+          license_key: key, device_id: id, device_token: token,
+        });
+        if (!verdict.valid && verdict.reason === 'device_not_activated') token = '';
       }
 
-      if (!token || !res.valid) {
-        res = await activateLicense(key);
-        if (res.valid && res.device_token) {
-          token = res.device_token;
-          localStorage.setItem(STORAGE.TOKEN, token);
+      if (!token) {
+        verdict = await request('/api/public/license/activate', {
+          license_key: key, device_id: id,
+          browser: navigator.userAgent.slice(0, 80),
+          os: navigator.platform.slice(0, 80),
+          device_type: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        });
+        if (!verdict.valid || !verdict.device_token) {
+          throw new Error(reasonText(verdict.reason));
         }
+        token = verdict.device_token;
+        storage.set(TOKEN_STORE, token);
+      } else if (!verdict?.valid) {
+        throw new Error(reasonText(verdict?.reason));
       }
 
-      if (res.valid) {
-        localStorage.setItem(STORAGE.KEY, key);
-        status.innerHTML = '<span class="verified-badge">✓ Verified! Loading code...</span>';
+      storage.set(KEY_STORE, key);
+      message('License valid. Downloading the published release…', '#42d6a0');
 
-        // সার্ভার থেকে কোড লোড ও রান করা
-        await loadAndExecuteServerCode(key, token);
-
-        setTimeout(() => {
-          document.getElementById('settingsPopup')?.classList.remove('show');
-        }, 1000);
-      } else {
-        localStorage.removeItem(STORAGE.KEY);
-        status.innerHTML = `<span class="unverified-badge">✗ ${res.reason || 'Invalid License'}</span>`;
-        showInvalidPopup();
+      const payload = await request('/api/public/client/release-code', {
+        license_key: key, device_id: id, device_token: token,
+      });
+      if (!payload.valid) throw new Error(reasonText(payload.reason));
+      if (!payload.release || !Array.isArray(payload.release.files) || !payload.release.files.length) {
+        throw new Error('No published release or source files were found. Publish a release in the admin panel first.');
       }
-    } catch (err) {
-      status.innerHTML = '<span class="unverified-badge">✗ Network Error</span>';
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'VERIFY LICENSE';
+
+      // Integrity-check every received file before any code is executed.
+      for (const file of payload.release.files) {
+        if (!file || typeof file.path !== 'string' || typeof file.content !== 'string' || typeof file.sha256 !== 'string') {
+          throw new Error('The release contains an invalid file.');
+        }
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(file.content));
+        const actual = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+        if (actual !== file.sha256) throw new Error(`Integrity check failed for ${file.path}.`);
+      }
+
+      // Keep the loader generic: execute only your own, trusted application scripts.
+      // Place a file named client.js in the release to make it the entrypoint.
+      const entry = payload.release.files.find(file => /(^|\/)client\.js$/i.test(file.path));
+      if (!entry) throw new Error('Published release is missing client.js. Add that entry file and publish again.');
+
+      const runClient = new Function('API_BASE_URL', 'LICENSE_KEY', 'DEVICE_ID', 'DEVICE_TOKEN',
+        `'use strict';\n${entry.content}\n//# sourceURL=${entry.path}`);
+      runClient(API, key, id, token);
+
+      clearButton.style.display = 'block';
+      message(`License verified · release ${payload.release.version} loaded.`, '#42d6a0');
+      setTimeout(() => overlay.remove(), 900);
+    } catch (error) {
+      message(error?.message || 'Could not verify license or load the published release.', '#ff7878');
+      verifyButton.disabled = false;
+      verifyButton.textContent = 'Try again';
     }
   }
 
-  // --- পেজ লোড হলে স্বয়ংক্রিয় ব্যাকগ্রাউন্ড চেক ---
-  async function startup() {
-    buildUI();
-    const key = localStorage.getItem(STORAGE.KEY);
-    const token = localStorage.getItem(STORAGE.TOKEN);
-
-    if (key && token) {
-      try {
-        const res = await verifyLicense(key, token);
-        if (res.valid) {
-          console.log('[System] Auto-verified active license.');
-          await loadAndExecuteServerCode(key, token);
-          return;
-        }
-      } catch (e) {
-        console.warn('[System] Auto-check failed, waiting for user input.');
-      }
-    }
-
-    // লাইসেন্স না থাকলে সরাসরি পপআপ আসবে
-    document.getElementById('settingsPopup')?.classList.add('show');
+  function reasonText(reason) {
+    const messages = {
+      invalid_license: 'This license key is invalid.',
+      expired: 'This license has expired.',
+      inactive: 'This license is inactive.',
+      suspended: 'This license is suspended.',
+      banned: 'This license is blocked.',
+      device_blocked: 'This device is blocked for this license.',
+      device_limit_reached: 'This license has reached its device limit.',
+      device_not_activated: 'This device is not activated. Try again to activate it.',
+      maintenance: 'The license server is temporarily under maintenance.',
+      rate_limited: 'Too many attempts. Please wait and try again.',
+      server_unavailable: 'The license server is unavailable. Check your connection and retry.',
+      no_published_release: 'No release has been published yet. Publish one in the admin panel.',
+    };
+    return messages[reason] || `License check failed${reason ? `: ${reason}` : '.'}`;
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startup);
-  } else {
-    startup();
-  }
+  verifyButton.addEventListener('click', verifyAndLoad);
+  keyInput.addEventListener('keydown', event => { if (event.key === 'Enter') verifyAndLoad(); });
+  clearButton.addEventListener('click', () => {
+    storage.remove(KEY_STORE);
+    storage.remove(TOKEN_STORE);
+    keyInput.value = '';
+    clearButton.style.display = 'none';
+    message('Saved license removed.');
+    verifyButton.textContent = 'Verify & Load';
+  });
 })();
