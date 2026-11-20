@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         DemoToLiveAdmin Licensed Client
+// @name         DemoToLiveAdmin Dynamic Loader
 // @namespace    https://demotoliveadmin.lovable.app/
-// @version      1.0.0
-// @description  Verifies a license and loads a published client script from your license server.
-// @match        https://YOUR-OWN-APP.example/*
+// @version      1.1.0
+// @description  Verifies license and dynamically executes published release scripts.
+// @match        *://*/*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
 // @connect      demotoliveadmin.lovable.app
@@ -47,10 +47,10 @@
           data: payload, timeout: 15000,
           onload: response => {
             try { resolve(JSON.parse(response.responseText)); }
-            catch { reject(new Error('The license server returned an unreadable response.')); }
+            catch { reject(new Error('Invalid response from license server.')); }
           },
-          onerror: () => reject(new Error('Could not connect to the license server.')),
-          ontimeout: () => reject(new Error('The license server request timed out.')),
+          onerror: () => reject(new Error('Network error connecting to license server.')),
+          ontimeout: () => reject(new Error('Request timed out.')),
         });
         return;
       }
@@ -74,7 +74,7 @@
     <section style="width:min(420px,100%);background:#171922;border:1px solid #383b49;border-radius:18px;padding:24px;box-shadow:0 20px 80px #0009">
       <div style="font-size:12px;letter-spacing:.12em;color:#8e91a2;font-weight:700">LICENSED CLIENT</div>
       <h2 style="margin:8px 0 6px;font-size:23px">Verify your license</h2>
-      <p style="margin:0 0 18px;color:#aeb1bf">Enter your license key to activate this device and load the published client.</p>
+      <p style="margin:0 0 18px;color:#aeb1bf">Enter your license key to activate this device and load the published code.</p>
       <input id="dtla-key" autocomplete="off" placeholder="Enter license key" style="box-sizing:border-box;width:100%;padding:13px 14px;background:#0d0f15;border:1px solid #444859;border-radius:10px;color:#fff;font:inherit;outline:none">
       <div id="dtla-status" role="status" style="min-height:22px;margin:12px 0;color:#f4bc56"></div>
       <button id="dtla-verify" style="width:100%;padding:13px;border:0;border-radius:10px;background:#42d6a0;color:#07140f;font:700 15px system-ui;cursor:pointer">Verify &amp; Load</button>
@@ -98,7 +98,7 @@
     if (key.length < 10) return message('Please enter a valid license key.', '#ff7878');
     verifyButton.disabled = true;
     verifyButton.textContent = 'Checking license…';
-    message('Verifying this device with the license server…');
+    message('Verifying license with server…');
 
     try {
       const id = deviceId();
@@ -129,40 +129,40 @@
       }
 
       storage.set(KEY_STORE, key);
-      message('License valid. Downloading the published release…', '#42d6a0');
+      message('License valid. Fetching published code…', '#42d6a0');
 
       const payload = await request('/api/public/client/release-code', {
         license_key: key, device_id: id, device_token: token,
       });
       if (!payload.valid) throw new Error(reasonText(payload.reason));
       if (!payload.release || !Array.isArray(payload.release.files) || !payload.release.files.length) {
-        throw new Error('No published release or source files were found. Publish a release in the admin panel first.');
+        throw new Error('No published release files found in server.');
       }
 
-      // Integrity-check every received file before any code is executed.
+      // SHA-256 integrity check
       for (const file of payload.release.files) {
-        if (!file || typeof file.path !== 'string' || typeof file.content !== 'string' || typeof file.sha256 !== 'string') {
-          throw new Error('The release contains an invalid file.');
-        }
         const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(file.content));
         const actual = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
-        if (actual !== file.sha256) throw new Error(`Integrity check failed for ${file.path}.`);
+        if (actual !== file.sha256) throw new Error(`Integrity check failed for ${file.path}`);
       }
 
-      // Keep the loader generic: execute only your own, trusted application scripts.
-      // Place a file named client.js in the release to make it the entrypoint.
-      const entry = payload.release.files.find(file => /(^|\/)client\.js$/i.test(file.path));
-      if (!entry) throw new Error('Published release is missing client.js. Add that entry file and publish again.');
+      // Automatically finds any .js file (e.g., lovabledemotolive.js)
+      const jsFiles = payload.release.files.filter(f => /\.js$/i.test(f.path));
+      if (!jsFiles.length) {
+        throw new Error('No JavaScript (.js) file found in the release.');
+      }
+      const entry = jsFiles.find(f => /(^|\/)client\.js$/i.test(f.path)) || jsFiles[0];
 
+      // Execute the downloaded code in the page context
       const runClient = new Function('API_BASE_URL', 'LICENSE_KEY', 'DEVICE_ID', 'DEVICE_TOKEN',
         `'use strict';\n${entry.content}\n//# sourceURL=${entry.path}`);
       runClient(API, key, id, token);
 
       clearButton.style.display = 'block';
-      message(`License verified · release ${payload.release.version} loaded.`, '#42d6a0');
-      setTimeout(() => overlay.remove(), 900);
+      message(`Loaded: ${entry.path} (v${payload.release.version})`, '#42d6a0');
+      setTimeout(() => overlay.remove(), 800);
     } catch (error) {
-      message(error?.message || 'Could not verify license or load the published release.', '#ff7878');
+      message(error?.message || 'Verification or loading failed.', '#ff7878');
       verifyButton.disabled = false;
       verifyButton.textContent = 'Try again';
     }
@@ -175,15 +175,15 @@
       inactive: 'This license is inactive.',
       suspended: 'This license is suspended.',
       banned: 'This license is blocked.',
-      device_blocked: 'This device is blocked for this license.',
-      device_limit_reached: 'This license has reached its device limit.',
-      device_not_activated: 'This device is not activated. Try again to activate it.',
-      maintenance: 'The license server is temporarily under maintenance.',
-      rate_limited: 'Too many attempts. Please wait and try again.',
-      server_unavailable: 'The license server is unavailable. Check your connection and retry.',
-      no_published_release: 'No release has been published yet. Publish one in the admin panel.',
+      device_blocked: 'This device is blocked.',
+      device_limit_reached: 'Device limit reached for this license.',
+      device_not_activated: 'Device not activated. Try again.',
+      maintenance: 'Server is temporarily in maintenance.',
+      rate_limited: 'Too many attempts. Please wait.',
+      server_unavailable: 'Server unavailable. Check connection.',
+      no_published_release: 'No published release found on server.',
     };
-    return messages[reason] || `License check failed${reason ? `: ${reason}` : '.'}`;
+    return messages[reason] || `Error: ${reason || 'unknown'}`;
   }
 
   verifyButton.addEventListener('click', verifyAndLoad);
@@ -193,7 +193,7 @@
     storage.remove(TOKEN_STORE);
     keyInput.value = '';
     clearButton.style.display = 'none';
-    message('Saved license removed.');
+    message('Saved license cleared.');
     verifyButton.textContent = 'Verify & Load';
   });
 })();
