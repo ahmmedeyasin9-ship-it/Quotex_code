@@ -1808,7 +1808,7 @@
     } catch (e) {}
 
     try {
-      document.querySelectorAll(".grOBD b.YnoT0, b.YnoT0").forEach((el) => {
+      document.querySelectorAll(".grOBD b.YnoT0, b.YnoT0, [data-qx-orig-balance]").forEach((el) => {
         if (el.dataset && el.dataset.qxOrigBalance) {
           if (el.textContent === el.dataset.qxLastForced) {
             el.textContent = el.dataset.qxOrigBalance;
@@ -1876,11 +1876,12 @@
     } catch (e) {}
 
     try {
-      document.querySelectorAll(".grOBD b.YnoT0, b.YnoT0").forEach((el) => {
-        const rowContainer = el.closest("li, a, div");
+      document.querySelectorAll('.grOBD b.YnoT0, b.YnoT0, ul[class*="account"] b, li[class*="RDtBn"] b').forEach((el) => {
+        const rowContainer = el.closest("li, [role='menuitem'], div, a");
         const parentText = (rowContainer?.textContent || "").toLowerCase();
         const isDemoRow =
-          parentText.includes("demo") ||
+          parentText.includes("demo account") ||
+          (parentText.includes("demo") && !parentText.includes("live account")) ||
           Boolean(rowContainer?.querySelector('a[href*="demo"], input[value="demo"]')) ||
           el.closest('[data-qx-account="demo"]') !== null;
 
@@ -1901,14 +1902,17 @@
             delete el.dataset.qxOrigBalance;
             delete el.dataset.qxLastForced;
           }
-        } else if (parentText.includes("live") && Number.isFinite(customLiveBal)) {
-          const formatted = formatUsd(customLiveBal);
-          if (el.textContent !== formatted) {
-            if (!el.dataset.qxOrigBalance || el.textContent !== el.dataset.qxLastForced) {
-              el.dataset.qxOrigBalance = el.textContent || "";
+        } else if (parentText.includes("live")) {
+          const targetLive = Number.isFinite(customLiveBal) ? customLiveBal : detectedBal;
+          if (targetLive !== null && Number.isFinite(targetLive)) {
+            const formatted = formatUsd(targetLive);
+            if (el.textContent !== formatted) {
+              if (!el.dataset.qxOrigBalance || el.textContent !== el.dataset.qxLastForced) {
+                el.dataset.qxOrigBalance = el.textContent || "";
+              }
+              el.dataset.qxLastForced = formatted;
+              el.textContent = formatted;
             }
-            el.dataset.qxLastForced = formatted;
-            el.textContent = formatted;
           }
         }
       });
@@ -2394,6 +2398,12 @@
     const auth = getStoredAuth();
     const savedKey = auth.key;
     isActivated = !!(savedKey && auth.token);
+    demoBalanceValue = (() => {
+      if (localStorage.getItem("demoBalanceReset") === "1") return null;
+      const raw = localStorage.getItem("demoBalance");
+      const parsed = raw !== null && raw !== "" ? parseFloat(raw) : NaN;
+      return Number.isFinite(parsed) ? parsed : null;
+    })();
 
     const initialBadgeHtml = savedKey
       ? '<div class="verified-badge" style="background:rgba(56,189,248,0.2);color:#38bdf8;">Checking license...</div>'
